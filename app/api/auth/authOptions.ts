@@ -137,18 +137,26 @@ export const authOptions: NextAuthOptions = {
         } catch (error: any) {
           console.error("Auth error:", error);
           
-          // Detectar errores de conexión a la base de datos
+          // Detectar errores de conexión a la base de datos (sin enmascarar otros errores)
           const errorMessage = error?.message || String(error);
-          if (error?.code === 'ECONNREFUSED' || 
-              error?.code === 'ETIMEDOUT' || 
-              error?.code === 'ENOTFOUND' ||
-              error?.errno === 'ECONNREFUSED' ||
-              error?.errno === 'ETIMEDOUT' ||
-              errorMessage.includes('ECONNREFUSED') ||
-              errorMessage.includes('ETIMEDOUT') ||
-              errorMessage.includes('getaddrinfo') ||
-              errorMessage.includes('connect')) {
-            throw new Error("database_connection_error");
+          const errorCode = error?.code || error?.driverError?.code || error?.errno;
+          const isDbConnectionError =
+            errorCode === 'ECONNREFUSED' ||
+            errorCode === 'ETIMEDOUT' ||
+            errorCode === 'ENOTFOUND' ||
+            errorCode === 'ECONNRESET' ||
+            errorCode === 'PROTOCOL_CONNECTION_LOST' ||
+            errorCode === 'ER_ACCESS_DENIED_ERROR' ||
+            errorCode === 'ER_HOST_NOT_PRIVILEGED' ||
+            /econnrefused|etimedout|enotfound|econnreset|protocol_connection_lost|unable to connect to the database|connect econn|connect etimedout/i.test(
+              errorMessage
+            );
+
+          if (isDbConnectionError) {
+            // Incluir detalle para diagnosticar en el cliente / logs
+            throw new Error(
+              `database_connection_error:${errorCode || 'unknown'}:${errorMessage.slice(0, 180)}`
+            );
           }
           
           // Si ya es un error con mensaje personalizado, re-lanzarlo

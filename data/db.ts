@@ -98,16 +98,16 @@ const getDbConfig = () => {
       ? {
           rejectUnauthorized,
         }
-      : false,
+      : undefined,
+    // Vercel serverless: keep the pool tiny; large pools cause flaky connects
     extra: {
-      connectionLimit: 20,
+      connectionLimit: 1,
       waitForConnections: true,
       queueLimit: 0,
       enableKeepAlive: true,
-      keepAliveInitialDelay: 10000,
+      keepAliveInitialDelay: 0,
       decimalNumbers: true,
       connectTimeout: 20000,
-      idleTimeout: 10000,
     },
   };
 };
