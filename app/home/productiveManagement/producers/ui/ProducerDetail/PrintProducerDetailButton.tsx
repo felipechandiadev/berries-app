@@ -52,7 +52,8 @@ export const PrintProducerDetailButton: React.FC<PrintProducerDetailButtonProps>
         icon="print"
         variant="text"
         onClick={() => setIsOpen(true)}
-        tooltip="Imprimir Detalle Completo"
+        title="Imprimir ficha completa"
+        ariaLabel="Imprimir ficha completa del productor"
       />
 
       <DialogToPrint

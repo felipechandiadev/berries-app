@@ -3,7 +3,6 @@
 import React from 'react';
 import { SectionProps } from '../types';
 import { AdvanceMetadata } from '@/data/entities/Transaction';
-import { PrintProducerSectionButton } from '../PrintProducerSectionButton';
 
 export const AdvancesSection: React.FC<SectionProps> = ({ data }) => {
   const formatPaymentMethod = (method: string) => {
@@ -23,14 +22,14 @@ export const AdvancesSection: React.FC<SectionProps> = ({ data }) => {
     <div className="h-full overflow-auto">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h3 className="text-lg font-medium">Anticipos</h3>
-        <PrintProducerSectionButton data={data} section="advances" />
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead>
             <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Folio</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Folio</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Productor</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Medio de Pago</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monto</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
@@ -45,6 +44,9 @@ export const AdvancesSection: React.FC<SectionProps> = ({ data }) => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(advance.createdAt).toLocaleDateString('es-CL')}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {advance.producerName}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {formatPaymentMethod((advance.metadata as AdvanceMetadata)?.paymentMethod || 'CASH')}
@@ -63,7 +65,7 @@ export const AdvancesSection: React.FC<SectionProps> = ({ data }) => {
               ))
             ) : (
               <tr>
-                <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
                   No hay anticipos registrados
                 </td>
               </tr>

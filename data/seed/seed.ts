@@ -132,6 +132,13 @@ type ReceptionSeedRow = {
   notes?: string;
 };
 
+type AdvanceSeedRow = {
+  producerName: string;
+  amount: number;
+  paymentMethod: "CASH" | "TRANSFER" | "CHECK";
+  notes?: string;
+};
+
 // ============ Helpers ============
 
 const loadSeedJson = <T>(fileName: string): T => {
@@ -1025,6 +1032,123 @@ const seedProducers = async (
 };
 
 /**
+ * Seed advances for producers with receptions.
+ * Enforces sum(advances) < sum(reception amounts) per producer.
+ */
+const seedAdvances = async (connection: mysql.Connection) => {
+  console.log("\n💵 Seeding advances...");
+
+  const advances = loadSeedJson<AdvanceSeedRow[]>("advances.json");
+  if (!Array.isArray(advances) || advances.length === 0) {
+    console.log("   ⚠️  No advances found in advances.json");
+    return;
+  }
+
+  const [userRows] = await connection.execute<RowDataPacket[]>(
+    `SELECT id FROM users ORDER BY userName ASC LIMIT 1`
+  );
+  if (userRows.length === 0) {
+    throw new Error("No users found to associate with advances");
+  }
+  const userId = String(userRows[0].id);
+
+  const [seasonRows] = await connection.execute<RowDataPacket[]>(
+    `SELECT id FROM seasons WHERE active = 1 ORDER BY startDate DESC LIMIT 1`
+  );
+  if (seasonRows.length === 0) {
+    throw new Error("No active season found for advance seed");
+  }
+  const seasonId = String(seasonRows[0].id);
+
+  const advancesByProducer = new Map<string, AdvanceSeedRow[]>();
+  for (const advance of advances) {
+    const producerName = (advance.producerName || "").trim();
+    if (!producerName) {
+      console.warn("   ⚠️  Advance missing producer name, skipping");
+      continue;
+    }
+    const list = advancesByProducer.get(producerName) || [];
+    list.push(advance);
+    advancesByProducer.set(producerName, list);
+  }
+
+  let inserted = 0;
+
+  for (const [producerName, producerAdvances] of advancesByProducer.entries()) {
+    const [producerRows] = await connection.execute<RowDataPacket[]>(
+      `SELECT id FROM producers WHERE name = ? LIMIT 1`,
+      [producerName]
+    );
+    if (producerRows.length === 0) {
+      console.warn(`   ⚠️  Producer not found for advance: ${producerName}`);
+      continue;
+    }
+    const producerId = String(producerRows[0].id);
+
+    const [receptionCapRows] = await connection.execute<RowDataPacket[]>(
+      `SELECT COALESCE(SUM(amount), 0) AS total
+       FROM transactions
+       WHERE type = 'RECEPTION'
+         AND producerId = ?
+         AND deletedAt IS NULL`,
+      [producerId]
+    );
+    const receptionCap = Math.floor(Number(receptionCapRows[0]?.total || 0));
+    if (receptionCap <= 0) {
+      console.warn(`   ⚠️  No reception balance for ${producerName}, skipping advances`);
+      continue;
+    }
+
+    let runningTotal = 0;
+    for (const advance of producerAdvances) {
+      const amount = Math.floor(Number(advance.amount));
+      if (!Number.isFinite(amount) || amount <= 0) {
+        console.warn(`   ⚠️  Invalid advance amount for ${producerName}, skipping`);
+        continue;
+      }
+      if (runningTotal + amount >= receptionCap) {
+        console.warn(
+          `   ⚠️  Advance ${amount} for ${producerName} would reach/exceed reception cap ${receptionCap} (running ${runningTotal}), skipping`
+        );
+        continue;
+      }
+
+      const paymentMethod = advance.paymentMethod || "CASH";
+      const metadata = {
+        paymentMethod,
+        paymentDetails: {},
+        notes: advance.notes || null,
+      };
+
+      await connection.execute(
+        `INSERT INTO transactions (type, direction, unit, amount, seasonId, producerId, userId, formatId, metadata, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+        [
+          "ADVANCE",
+          "OUT",
+          "CLP",
+          amount,
+          seasonId,
+          producerId,
+          userId,
+          null,
+          JSON.stringify(metadata),
+        ]
+      );
+
+      runningTotal += amount;
+      inserted++;
+    }
+
+    console.log(
+      `   ✓ ${producerName}: ${runningTotal.toLocaleString("es-CL")} CLP in advances (cap ${receptionCap.toLocaleString("es-CL")})`
+    );
+  }
+
+  console.log(`   ✓ Inserted ${inserted} advances`);
+};
+
+/**
  * Seed customers from JSON (creating persons first)
  */
 const seedCustomers = async (connection: mysql.Connection) => {
@@ -1216,7 +1340,10 @@ const runSeed = async (environment: "test" | "production" | "local" = "test") =>
     // 11. Receptions (producer receptions and returns)
     await seedReceptions(connection, trayMap, storageMap, varietyMap, formatMap);
 
-    // 12. Customers (with persons)
+    // 12. Advances (capped below each producer's reception totals)
+    await seedAdvances(connection);
+
+    // 13. Customers (with persons)
     await seedCustomers(connection);
 
     // Re-enable foreign key checks
@@ -1237,6 +1364,7 @@ const runSeed = async (environment: "test" | "production" | "local" = "test") =>
     console.log("   - Productive units from productiveUnits.json");
     console.log("   - Producers from producers.json (with persons, 6 linked to productive units)");
     console.log("   - Receptions from receptions.json (20 ARANDANOS / ARANDANERA)");
+    console.log("   - Advances from advances.json (1–2 per producer with receptions)");
     console.log("   - Customers from customers.json (with persons)");
     console.log("\n📭 Empty tables:");
     console.log("   - audits, permissions, admin_bank_accounts");

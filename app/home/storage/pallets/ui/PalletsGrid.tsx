@@ -201,8 +201,8 @@ export default function PalletsGrid({
         renderCell: ({ value }) => <span>{weightFormatter.format(Number(value || 0))}</span>,
       },
       {
-        field: 'dispatchWeight',
-        headerName: 'Peso despacho (kg)',
+        field: 'packsNetWeight',
+        headerName: 'Neto packs (kg)',
         type: 'number',
         align: 'right',
         headerAlign: 'right',
@@ -210,6 +210,38 @@ export default function PalletsGrid({
         sortable: true,
         filterable: true,
         renderCell: ({ value }) => <span>{weightFormatter.format(Number(value || 0))}</span>,
+      },
+      {
+        field: 'dispatchWeight',
+        headerName: 'Neto despacho (kg)',
+        type: 'number',
+        align: 'right',
+        headerAlign: 'right',
+        flex: 0.9,
+        sortable: true,
+        filterable: true,
+        renderCell: ({ value }) => <span>{weightFormatter.format(Number(value || 0))}</span>,
+      },
+      {
+        field: 'merma',
+        headerName: 'Merma (kg)',
+        type: 'number',
+        align: 'right',
+        headerAlign: 'right',
+        flex: 0.8,
+        sortable: false,
+        filterable: false,
+        renderCell: ({ row }: { row: PalletRow }) => {
+          const packsNet = Number(row.packsNetWeight || 0);
+          const dispatchNet = Number(row.dispatchWeight || 0);
+          const hasDispatch =
+            row.status === PalletStatus.DISPATCHED || dispatchNet > 0;
+          if (!hasDispatch) {
+            return <span>-</span>;
+          }
+          const merma = Number((packsNet - dispatchNet).toFixed(3));
+          return <span>{weightFormatter.format(merma)}</span>;
+        },
       },
       {
         field: 'status',

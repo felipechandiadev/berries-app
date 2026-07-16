@@ -8,63 +8,79 @@ interface ReportSelectorProps {
   onReportChange: (report: ReportType) => void;
 }
 
-const reports = [
+const reports: Array<{
+  id: ReportType;
+  name: string;
+  description: string;
+  icon: string;
+}> = [
   {
-    id: 'producer-productivity' as ReportType,
-    name: 'Productividad por Productor',
-    description: 'Análisis de rendimiento individual',
-    icon: '👥',
+    id: 'season-operations',
+    name: 'Temporada',
+    description: 'Kg in / bodega / out y CLP pendiente',
+    icon: 'calendar_month',
   },
   {
-    id: 'client-analysis' as ReportType,
-    name: 'Análisis de Clientes',
-    description: 'Segmentación y comportamiento',
-    icon: '🛒',
+    id: 'producer-ledger',
+    name: 'Productores',
+    description: 'Kg, CLP, anticipos y saldo',
+    icon: 'agriculture',
   },
   {
-    id: 'inventory-status' as ReportType,
-    name: 'Estado del Inventario',
-    description: 'Stock y disponibilidad',
-    icon: '📦',
+    id: 'warehouse-status',
+    name: 'Bodega',
+    description: 'Pallets, capacidad y bandejas',
+    icon: 'warehouse',
   },
   {
-    id: 'trends-analysis' as ReportType,
-    name: 'Análisis de Tendencias',
-    description: 'Evolución histórica y proyecciones',
-    icon: '📈',
+    id: 'settlements-advances',
+    name: 'Anticipos y liquidaciones',
+    description: 'Deuda y pagos a productores',
+    icon: 'account_balance_wallet',
   },
   {
-    id: 'financial-reports' as ReportType,
-    name: 'Reportes Financieros',
-    description: 'Análisis económico y rentabilidad',
-    icon: '💰',
+    id: 'sales-clients',
+    name: 'Ventas y clientes',
+    description: 'Despachos e ingresos',
+    icon: 'local_shipping',
   },
 ];
 
 export default function ReportSelector({ selectedReport, onReportChange }: ReportSelectorProps) {
   return (
     <div>
-      <h3 className="text-sm font-medium text-gray-900 mb-3">Tipo de Reporte</h3>
+      <h3 className="mb-3 text-sm font-medium text-gray-900">Tipo de reporte</h3>
       <div className="space-y-2">
-        {reports.map((report) => (
-          <button
-            key={report.id}
-            onClick={() => onReportChange(report.id)}
-            className={`w-full text-left p-3 rounded-lg border transition-colors ${
-              selectedReport === report.id
-                ? 'bg-blue-50 border-blue-200 text-blue-900'
-                : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <div className="flex items-start space-x-3">
-              <span className="text-lg">{report.icon}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{report.name}</p>
-                <p className="text-xs text-gray-500 mt-1">{report.description}</p>
+        {reports.map((report) => {
+          const active = selectedReport === report.id;
+          return (
+            <button
+              key={report.id}
+              type="button"
+              onClick={() => onReportChange(report.id)}
+              className={`w-full rounded-xl border p-3 text-left transition-colors ${
+                active
+                  ? 'border-[color:var(--dash-accent,#5A8A00)] bg-[color:var(--dash-soft,#F0F2EA)] text-gray-900'
+                  : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <span
+                  className={`material-symbols-outlined mt-0.5 ${
+                    active ? 'text-[color:var(--dash-accent,#5A8A00)]' : 'text-gray-500'
+                  }`}
+                  aria-hidden
+                >
+                  {report.icon}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{report.name}</p>
+                  <p className="mt-1 text-xs text-gray-500">{report.description}</p>
+                </div>
               </div>
-            </div>
-          </button>
-        ))}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

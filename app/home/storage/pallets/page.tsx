@@ -47,7 +47,7 @@ export default async function Page({ searchParams }: PageProps) {
   const filters = typeof params?.filters === 'string' ? params.filters : '';
   const fields = typeof params?.fields === 'string' && params.fields.trim()
     ? params.fields
-    : 'id,storageName,trayName,traysQuantity,capacity,weight,dispatchWeight,status,createdAt,updatedAt';
+    : 'id,storageName,trayName,traysQuantity,capacity,weight,packsNetWeight,dispatchWeight,status,createdAt,updatedAt';
 
   const pageParam = typeof params?.page === 'string' ? params.page : '1';
   const limitParam = typeof params?.limit === 'string' ? params.limit : '25';

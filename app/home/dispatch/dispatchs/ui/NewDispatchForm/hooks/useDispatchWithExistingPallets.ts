@@ -172,7 +172,8 @@ export function useDispatchWithExistingPallets(): UseDispatchWithExistingPallets
     setSelectedPallets(prev => [...prev, {
       pallet,
       grossWeight: 0,
-      palletWeight: 0,
+      // Prefill with the pallet's stored initial weight (peso inicial)
+      palletWeight: Number(pallet.weight) || 0,
       netWeight: 0,
     }]);
   }, [availablePallets, selectedPallets]);

@@ -115,77 +115,79 @@ const FormatSelector: React.FC<FormatSelectorProps> = ({
         />
       </div>
       
-      {/* Primera fila: Solo el precio */}
-      <div className="w-full mb-2">
-        <TextField
-          label="Precio"
-          type="currency"
-          currencySymbol={getCurrencySymbol(currentCurrency)}
-          value={priceInput}
-          onChange={(e) => {
-            const rawValue = e.target.value;
-            setPriceInput(rawValue);
-            isUserEditingPriceRef.current = true;
-
-            // Función para parsear el valor según la moneda
-            const parseCurrencyValue = (value: string): number => {
-              if (!value || value.trim() === '') return 0;
-              
-              // Remover símbolos de moneda
-              const cleaned = value.replace(/[$US]/g, '').replace(/\s+/g, '').trim();
-              
-              if (currentCurrency === Currency.USD && cleaned.includes(',')) {
-                // Formato USD con coma decimal: 1.234,56
-                const parts = cleaned.split(',');
-                const integerPart = parts[0].replace(/\./g, ''); // Remover puntos de miles
-                const decimalPart = parts[1] || '';
-                const normalized = integerPart + '.' + decimalPart;
-                const parsed = parseFloat(normalized);
-                return isNaN(parsed) ? 0 : parsed;
-              } else {
-                // Formato CLP: 1.234.567 (solo remover puntos de miles)
-                const normalized = cleaned.replace(/\./g, '');
-                const parsed = parseFloat(normalized);
-                return isNaN(parsed) ? 0 : parsed;
-              }
-            };
-
-            const parsedPrice = parseCurrencyValue(rawValue);
-            onPriceChange(parsedPrice);
-          }}
-          allowDecimalComma={allowDecimalComma}
-          disabled={!formatId || !isEditingPrice}
-          data-test-id={dataTestIdPrefix ? `${dataTestIdPrefix}-format-price` : 'format-price'}
-        />
-      </div>
-
-      {/* Segunda fila: Selector de moneda + IconButton de edición */}
-      <div className="flex items-end gap-2">
+      {/* Primera fila: Precio + botón editar */}
+      <div className="flex items-end gap-2 mb-2">
         <div className="flex-1">
-          <Select
-            label="Moneda"
-            options={currencyOptions}
-            value={currentCurrency}
-            onChange={(value) => {
-              if (value) {
-                onCurrencyChange(value as Currency);
-              }
+          <TextField
+            label="Precio"
+            type="currency"
+            currencySymbol={getCurrencySymbol(currentCurrency)}
+            value={priceInput}
+            onChange={(e) => {
+              const rawValue = e.target.value;
+              setPriceInput(rawValue);
+              isUserEditingPriceRef.current = true;
+
+              // Función para parsear el valor según la moneda
+              const parseCurrencyValue = (value: string): number => {
+                if (!value || value.trim() === '') return 0;
+                
+                // Remover símbolos de moneda
+                const cleaned = value.replace(/[$US]/g, '').replace(/\s+/g, '').trim();
+                
+                if (currentCurrency === Currency.USD && cleaned.includes(',')) {
+                  // Formato USD con coma decimal: 1.234,56
+                  const parts = cleaned.split(',');
+                  const integerPart = parts[0].replace(/\./g, ''); // Remover puntos de miles
+                  const decimalPart = parts[1] || '';
+                  const normalized = integerPart + '.' + decimalPart;
+                  const parsed = parseFloat(normalized);
+                  return isNaN(parsed) ? 0 : parsed;
+                } else {
+                  // Formato CLP: 1.234.567 (solo remover puntos de miles)
+                  const normalized = cleaned.replace(/\./g, '');
+                  const parsed = parseFloat(normalized);
+                  return isNaN(parsed) ? 0 : parsed;
+                }
+              };
+
+              const parsedPrice = parseCurrencyValue(rawValue);
+              onPriceChange(parsedPrice);
             }}
+            allowDecimalComma={allowDecimalComma}
             disabled={!formatId || !isEditingPrice}
-            data-test-id={dataTestIdPrefix ? `${dataTestIdPrefix}-currency-select` : 'format-currency-select'}
+            data-test-id={dataTestIdPrefix ? `${dataTestIdPrefix}-format-price` : 'format-price'}
           />
         </div>
         {canEditPrice && (
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center pb-0.5">
             <IconButton
-              icon="edit"
+              icon={isEditingPrice ? 'check' : 'edit'}
               variant="basicSecondary"
               size="sm"
-              ariaLabel="Editar precio y moneda"
+              ariaLabel={isEditingPrice ? 'Confirmar precio y moneda' : 'Editar precio y moneda'}
+              title={isEditingPrice ? 'Confirmar' : 'Editar precio'}
               onClick={() => setIsEditingPrice(!isEditingPrice)}
+              disabled={!formatId}
             />
           </div>
         )}
+      </div>
+
+      {/* Segunda fila: Selector de moneda */}
+      <div className="w-full">
+        <Select
+          label="Moneda"
+          options={currencyOptions}
+          value={currentCurrency}
+          onChange={(value) => {
+            if (value) {
+              onCurrencyChange(value as Currency);
+            }
+          }}
+          disabled={!formatId || !isEditingPrice}
+          data-test-id={dataTestIdPrefix ? `${dataTestIdPrefix}-currency-select` : 'format-currency-select'}
+        />
       </div>
     </div>
   );

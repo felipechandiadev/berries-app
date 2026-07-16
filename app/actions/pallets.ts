@@ -13,6 +13,7 @@ import { revalidatePath } from 'next/cache';
 import { getCurrentUserSession } from './auth.server';
 import { getActiveSeason } from './seasons';
 import { Brackets, EntityManager, IsNull } from 'typeorm';
+import { syncPalletsPacksNetWeight } from './palletPacksNet';
 
 const APP_TIMEZONE = 'America/Santiago';
 
@@ -44,6 +45,7 @@ async function ensureTransactionTypeEnum(manager: EntityManager) {
 function serializePallet(pallet: Pallet): any {
   const weight = Number((pallet as any).weight ?? 0);
   const dispatchWeight = Number((pallet as any).dispatchWeight ?? 0);
+  const packsNetWeight = Number((pallet as any).packsNetWeight ?? 0);
 
   return JSON.parse(JSON.stringify({
     id: pallet.id,
@@ -55,6 +57,7 @@ function serializePallet(pallet: Pallet): any {
     capacity: pallet.capacity,
     weight,
     dispatchWeight,
+    packsNetWeight,
     status: pallet.status,
     metadata: pallet.metadata ?? null,
     createdAt: pallet.createdAt,
@@ -165,6 +168,7 @@ const PALLET_VALID_FIELDS = [
   'capacity',
   'weight',
   'dispatchWeight',
+  'packsNetWeight',
   'status',
   'createdAt',
   'updatedAt',
@@ -180,6 +184,7 @@ const PALLET_VALID_SORT_FIELDS = [
   'capacity',
   'weight',
   'dispatchWeight',
+  'packsNetWeight',
   'status',
   'createdAt',
   'updatedAt',
@@ -253,7 +258,8 @@ function applyPalletFilters(query: any, filters?: PalletGridFilters) {
         case 'traysQuantity':
         case 'capacity':
         case 'weight':
-        case 'dispatchWeight': {
+        case 'dispatchWeight':
+        case 'packsNetWeight': {
           const numericValue = Number(filter.value);
           if (!Number.isNaN(numericValue)) {
             query = query.andWhere(`pallet.${filter.column} = :${paramName}`, {
@@ -709,10 +715,6 @@ export async function createPallet(data: CreatePalletInput, auditUserId?: string
       return { success: false, error: 'El peso de despacho debe ser un número positivo' };
     }
 
-    if (data.dispatchWeight > data.weight) {
-      return { success: false, error: 'El peso de despacho no puede ser mayor que el peso inicial' };
-    }
-
     if (traysQuantity > data.capacity) {
       return { success: false, error: 'La cantidad de bandejas no puede exceder la capacidad' };
     }
@@ -754,6 +756,7 @@ export async function createPallet(data: CreatePalletInput, auditUserId?: string
       capacity: data.capacity,
       weight: data.weight,
       dispatchWeight: data.dispatchWeight,
+      packsNetWeight: 0,
       status: data.status || PalletStatus.AVAILABLE,
       metadata: data.metadata ?? null,
     };
@@ -896,12 +899,6 @@ export async function updatePallet(data: UpdatePalletInput, auditUserId?: string
       return { success: false, error: 'La cantidad de bandejas no puede exceder la capacidad' };
     }
 
-    const nextWeight = updates.weight ?? existingPallet.weight;
-    const nextDispatchWeight = updates.dispatchWeight ?? existingPallet.dispatchWeight;
-    if (nextDispatchWeight > nextWeight) {
-      return { success: false, error: 'El peso de despacho no puede ser mayor que el peso inicial' };
-    }
-
     const hasChanges = Object.keys(updates).length > 0;
     if (!hasChanges) {
       return { success: false, error: 'No se detectaron cambios' };
@@ -931,6 +928,10 @@ export async function updatePallet(data: UpdatePalletInput, auditUserId?: string
 
     const result = await db.transaction(async (manager) => {
       await manager.update(Pallet, palletId, updates);
+
+      if (updates.metadata !== undefined) {
+        await syncPalletsPacksNetWeight(manager, [palletId]);
+      }
 
       const updatedPallet = await manager.findOne(Pallet, {
         where: { id: palletId },
@@ -1160,6 +1161,7 @@ export async function getPalletDetail(palletId: number): Promise<PalletDetailRes
           rp.formatName,
           rp.trayId,
           rp.trayLabel,
+          rp.traysQuantity,
           rp.netWeight,
           t.producerId,
           p.name as producerName,
@@ -1191,6 +1193,15 @@ export async function getPalletDetail(palletId: number): Promise<PalletDetailRes
       // Construir el array de packs con detalle
       for (const assignment of metadata) {
         const packInfo = packMap.get(String(assignment.receptionPackId));
+        const packNet = Number(packInfo?.netWeight) || 0;
+        const packTrays = Number(packInfo?.traysQuantity) || 0;
+        const assigned = Number(assignment.quantity) || 0;
+        // Prorratear neto del pack por bandejas presentes en este pallet
+        const netWeight =
+          packTrays > 0
+            ? Number(((packNet * assigned) / packTrays).toFixed(3))
+            : 0;
+
         packs.push({
           receptionPackId: assignment.receptionPackId,
           trayId: assignment.trayId,
@@ -1200,7 +1211,7 @@ export async function getPalletDetail(palletId: number): Promise<PalletDetailRes
           formatName: packInfo?.formatName ?? 'Desconocido',
           producerName: packInfo?.producerName ?? null,
           productiveUnitName: packInfo?.productiveUnitName ?? null,
-          netWeight: packInfo?.netWeight ?? 0,
+          netWeight,
         });
       }
     }
@@ -1491,6 +1502,8 @@ export async function transferTraysBetweenPallets(
         metadata: targetMetadata,
         status: targetStatus,
       });
+
+      await syncPalletsPacksNetWeight(manager, [sourcePalletId, targetPalletId]);
 
       // Crear transacción de auditoría
       const transactionMetadata: PalletTrayTransferMetadata = {

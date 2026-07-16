@@ -50,7 +50,7 @@ export default function ChartContainer({
               </div>
               <div className="flex-1 bg-gray-200 rounded-full h-6">
                 <div
-                  className="bg-blue-500 h-6 rounded-full transition-all duration-300"
+                  className="bg-[color:var(--dash-accent,#5A8A00)] h-6 rounded-full transition-all duration-300"
                   style={{ width: `${percentage}%` }}
                 ></div>
               </div>
@@ -66,7 +66,7 @@ export default function ChartContainer({
 
   const renderLineChart = () => {
     const points = data.map((item, index) => {
-      const x = (index / (data.length - 1)) * 100;
+      const x = data.length === 1 ? 50 : (index / (data.length - 1)) * 100;
       const y = maxValue > 0 ? 100 - (item.value / maxValue) * 100 : 50;
       return `${x},${y}`;
     }).join(' ');
@@ -85,14 +85,14 @@ export default function ChartContainer({
           {/* Line */}
           <polyline
             fill="none"
-            stroke="#3b82f6"
+            stroke="#5A8A00"
             strokeWidth="3"
             points={points}
           />
 
           {/* Points */}
           {data.map((item, index) => {
-            const x = (index / (data.length - 1)) * 100;
+            const x = data.length === 1 ? 50 : (index / (data.length - 1)) * 100;
             const y = maxValue > 0 ? 100 - (item.value / maxValue) * 100 : 50;
             return (
               <circle
@@ -100,7 +100,7 @@ export default function ChartContainer({
                 cx={`${x}%`}
                 cy={`${y}%`}
                 r="4"
-                fill="#3b82f6"
+                fill="#5A8A00"
                 className="hover:r-6 transition-all"
               />
             );

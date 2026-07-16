@@ -160,6 +160,7 @@ export interface DispatchMetadata {
     name: string;
   };
   pallets: Array<{
+    palletId?: number;
     trayId?: string;
     trayLabel?: string;
     trayCount: number;

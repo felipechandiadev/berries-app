@@ -381,6 +381,7 @@ export async function createDispatch(payload: CreateDispatchPayload): Promise<Tr
       const trayMass = trayWeight * (pallet.trayCount ?? 0);
       const computedNet = pallet.netWeight ?? (pallet.grossWeight - pallet.palletWeight - trayMass);
       return {
+        palletId: pallet.palletId,
         trayId: pallet.trayId || undefined,
         trayLabel: pallet.trayLabel || undefined,
         trayCount: pallet.trayCount,
@@ -433,19 +434,16 @@ export async function createDispatch(payload: CreateDispatchPayload): Promise<Tr
     }, sessionUserId);
 
     if (response.success) {
-      // Actualizar estado de los pallets a DISPATCHED
-      const palletIds = payload.pallets
-        .filter(p => p.palletId !== undefined && p.palletId !== null)
-        .map(p => p.palletId!);
-      
-      if (palletIds.length > 0) {
-        const db = await getDb();
-        await db.getRepository(Pallet).update(
-          palletIds,
-          { status: PalletStatus.DISPATCHED }
-        );
-        console.log(`[createDispatch] Updated ${palletIds.length} pallets to DISPATCHED status`);
+      // Actualizar estado y neto de despacho de cada pallet
+      const db = await getDb();
+      for (const pallet of normalizedPallets) {
+        if (pallet.palletId == null) continue;
+        await db.getRepository(Pallet).update(pallet.palletId, {
+          status: PalletStatus.DISPATCHED,
+          dispatchWeight: Number((pallet.netWeight ?? 0).toFixed(3)),
+        });
       }
+      console.log(`[createDispatch] Updated ${normalizedPallets.filter(p => p.palletId != null).length} pallets to DISPATCHED with dispatchWeight`);
       
       revalidatePath('/home/dispatch/dispatchs');
       revalidatePath('/home/storage/pallets');
@@ -511,6 +509,7 @@ export async function updateDispatchPallets(
       const trayMass = trayWeight * (pallet.trayCount ?? 0);
       const computedNet = pallet.netWeight ?? (pallet.grossWeight - pallet.palletWeight - trayMass);
       return {
+        palletId: pallet.palletId,
         trayId: pallet.trayId || undefined,
         trayLabel: pallet.trayLabel || undefined,
         trayCount: pallet.trayCount,
@@ -548,6 +547,14 @@ export async function updateDispatchPallets(
 
     await db.getRepository(Transaction).save(transaction);
 
+    // Persist neto despacho on each pallet entity
+    for (const pallet of normalizedPallets) {
+      if (pallet.palletId == null) continue;
+      await db.getRepository(Pallet).update(pallet.palletId, {
+        dispatchWeight: Number((pallet.netWeight ?? 0).toFixed(3)),
+      });
+    }
+
     // Registrar auditoría de actualización
     await logTransactionAudit(
       db.manager,
@@ -567,6 +574,7 @@ export async function updateDispatchPallets(
     );
     
     revalidatePath('/home/dispatch/dispatchs');
+    revalidatePath('/home/storage/pallets');
     
     return { success: true };
   } catch (error: any) {

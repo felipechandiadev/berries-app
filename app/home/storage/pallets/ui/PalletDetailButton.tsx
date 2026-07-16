@@ -6,6 +6,7 @@ import Dialog from '@/app/baseComponents/Dialog/Dialog';
 import { useAlert } from '@/app/state/contexts/AlertContext';
 import { getPalletDetail, type PalletPackDetail } from '@/app/actions/pallets';
 import type { PalletRow } from './types';
+import PrintPalletDetailButton from './PrintPalletDetailButton';
 
 interface PalletDetailButtonProps {
   pallet: PalletRow;
@@ -146,9 +147,17 @@ export default function PalletDetailButton({ pallet }: PalletDetailButtonProps) 
       <Dialog
         open={open}
         onClose={handleClose}
-        title={`Detalle Pallet #${pallet.id}`}
+        title=""
+        hideActions
       >
         <div className="w-full max-w-4xl">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h2 className="title text-lg font-semibold text-gray-900">
+              Detalle Pallet #{pallet.id}
+            </h2>
+            {detail && !isLoading && <PrintPalletDetailButton detail={detail} />}
+          </div>
+
           {isLoading ? (
             <div className="flex justify-center items-center py-12">
               <span className="text-gray-500">Cargando detalle...</span>

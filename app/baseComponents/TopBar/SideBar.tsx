@@ -28,7 +28,6 @@ const ROLE_LABELS: Record<string, string> = {
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'BerriesApp';
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '2.1.0';
-const APP_RELEASE = process.env.NEXT_PUBLIC_APP_RELEASE || '16-Diciembre-2025';
 
 const SideBar: React.FC<SideBarProps> = ({ menuItems, className, style, onClose, logoUrl }) => {
   const router = useRouter();
@@ -142,7 +141,6 @@ const SideBar: React.FC<SideBarProps> = ({ menuItems, className, style, onClose,
         {/* <div className="text-sm opacity-70" data-test-id="side-bar-app-version">{'1.2.12'}</div> */}
         <div className="text-lg font-bold text-gray-800" data-test-id="side-bar-app-name">{APP_NAME}</div>
         <div className="text-sm text-gray-600" data-test-id="side-bar-app-version">v{APP_VERSION}</div>
-        <div className="text-xs text-gray-500" data-test-id="side-bar-app-release">Release: {APP_RELEASE}</div>
       </div>
 {/* 
       {user && (() => {

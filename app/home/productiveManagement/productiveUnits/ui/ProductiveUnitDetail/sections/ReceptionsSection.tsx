@@ -2,21 +2,20 @@
 
 import React from 'react';
 import { SectionProps } from '../types';
-import { PrintProducerSectionButton } from '../PrintProducerSectionButton';
 
 export const ReceptionsSection: React.FC<SectionProps> = ({ data }) => {
   return (
     <div className="h-full overflow-auto">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h3 className="text-lg font-medium">Recepciones</h3>
-        <PrintProducerSectionButton data={data} section="receptions" />
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead>
             <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Folio</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Folio</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Productor</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Variedad</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Formato</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Neto KG</th>
@@ -34,6 +33,9 @@ export const ReceptionsSection: React.FC<SectionProps> = ({ data }) => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(reception.createdAt).toLocaleDateString('es-CL')}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {reception.producerName}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {reception.variety}
@@ -61,7 +63,7 @@ export const ReceptionsSection: React.FC<SectionProps> = ({ data }) => {
               ))
             ) : (
               <tr>
-                <td colSpan={8} className="px-6 py-4 text-center text-sm text-gray-500">
+                <td colSpan={9} className="px-6 py-4 text-center text-sm text-gray-500">
                   No hay recepciones registradas
                 </td>
               </tr>

@@ -1,0 +1,38 @@
+[
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "amount": 12000,
+    "paymentMethod": "CASH",
+    "notes": "Seed anticipo 1 - Carlos"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "amount": 6000,
+    "paymentMethod": "CASH",
+    "notes": "Seed anticipo 2 - Carlos"
+  },
+  {
+    "producerName": "Sergio Contreras Bravo",
+    "amount": 15000,
+    "paymentMethod": "CASH",
+    "notes": "Seed anticipo 1 - Sergio"
+  },
+  {
+    "producerName": "Gustavo Malicet Sepulveda",
+    "amount": 10000,
+    "paymentMethod": "CASH",
+    "notes": "Seed anticipo 1 - Gustavo"
+  },
+  {
+    "producerName": "Gustavo Malicet Sepulveda",
+    "amount": 7000,
+    "paymentMethod": "CASH",
+    "notes": "Seed anticipo 2 - Gustavo"
+  },
+  {
+    "producerName": "Juan Fuentes Lopez",
+    "amount": 20000,
+    "paymentMethod": "CASH",
+    "notes": "Seed anticipo 1 - Juan"
+  }
+]

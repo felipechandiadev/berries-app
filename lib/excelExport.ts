@@ -175,7 +175,9 @@ export interface PalletExcelRow {
   capacity: number;
   fillPercentage: number;
   weight: number;
+  packsNetWeight: number;
   dispatchWeight: number;
+  merma: number | string;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -199,6 +201,9 @@ export function formatPalletsDataForExcel(palletsData: any[]): PalletExcelRow[] 
     const fillPercentage = capacity > 0 ? Math.round((traysQuantity / capacity) * 100) : 0;
     
     const statusKey = typeof pallet.status === 'string' ? pallet.status : '';
+    const packsNetWeight = Number(pallet.packsNetWeight ?? 0);
+    const dispatchWeight = Number(pallet.dispatchWeight ?? 0);
+    const hasDispatch = statusKey === 'DISPATCHED' || statusKey === 'Despachado' || dispatchWeight > 0;
     return {
       id: Number(pallet.id ?? 0),
       storageName: pallet.storageName || '-',
@@ -207,7 +212,9 @@ export function formatPalletsDataForExcel(palletsData: any[]): PalletExcelRow[] 
       capacity,
       fillPercentage,
       weight: Number(pallet.weight ?? 0),
-      dispatchWeight: Number(pallet.dispatchWeight ?? 0),
+      packsNetWeight,
+      dispatchWeight,
+      merma: hasDispatch ? Number((packsNetWeight - dispatchWeight).toFixed(3)) : '-',
       status: PALLET_STATUS_LABEL_MAP[statusKey] || statusKey || '-',
       createdAt: typeof pallet.createdAt === 'string'
         ? formatAuditDate(pallet.createdAt)
@@ -240,7 +247,9 @@ export function createPalletsWorkbook(data: PalletExcelRow[], options: ExcelExpo
     'Capacidad': row.capacity,
     'Utilizado (%)': row.fillPercentage,
     'Peso inicial (kg)': row.weight,
-    'Peso despacho (kg)': row.dispatchWeight,
+    'Neto packs (kg)': row.packsNetWeight,
+    'Neto despacho (kg)': row.dispatchWeight,
+    'Merma (kg)': row.merma,
     'Estado': row.status,
     'Creado': row.createdAt,
     'Actualizado': row.updatedAt,

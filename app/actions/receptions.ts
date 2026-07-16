@@ -17,6 +17,7 @@ import { getCurrentUserSession } from './auth.server';
 import { revalidatePath } from 'next/cache';
 import { formatAuditDate } from '../../lib/dateTimeUtils';
 import { logTransactionAudit } from './transactions';
+import { syncPalletsPacksNetWeight } from './palletPacksNet';
 import {
   type ReceptionDetailData,
   type ReceptionDetailHistoryItem,
@@ -495,6 +496,13 @@ export async function processReception(input: ProcessReceptionInput): Promise<Pr
         }
       }
 
+      const assignedPalletIdsForSync = [
+        ...new Set(palletAssignmentTransactions.map((item) => item.palletId).filter(Boolean)),
+      ];
+      if (assignedPalletIdsForSync.length > 0) {
+        await syncPalletsPacksNetWeight(manager, assignedPalletIdsForSync);
+      }
+
       const trayIdsToLoad = new Set<string>();
       for (const { pack } of savedPacks) {
         if (pack.trayId) {
@@ -918,6 +926,7 @@ export async function removeReceptionPack(input: RemoveReceptionPackInput): Prom
       let trayTransactionId: string | undefined;
 
       const assignmentsRaw = Array.isArray(pack.palletAssignments) ? pack.palletAssignments : [];
+      const releasedPalletIds: number[] = [];
       for (const assignment of assignmentsRaw) {
         const palletId = assignment?.palletId;
         const traysAssigned = normalizeNumber(assignment?.traysAssigned, 0);
@@ -967,6 +976,7 @@ export async function removeReceptionPack(input: RemoveReceptionPackInput): Prom
         pallet.metadata = metadataArray.length ? (metadataArray as PalletMetadata) : null;
 
         await manager.save(Pallet, pallet);
+        releasedPalletIds.push(Number(palletId));
 
         const palletRelease = manager.create(Transaction, {
           type: TransactionType.PALLET_TRAY_RELEASE,
@@ -1005,6 +1015,10 @@ export async function removeReceptionPack(input: RemoveReceptionPackInput): Prom
           context: `pack ${packNumber ?? pack.id} → pallet ${palletId}`,
         });
         await manager.save(TransactionRelation, palletReleaseRelation);
+      }
+
+      if (releasedPalletIds.length > 0) {
+        await syncPalletsPacksNetWeight(manager, releasedPalletIds);
       }
 
       if (traysQuantity > 0 && pack.trayId) {
@@ -2892,6 +2906,28 @@ export async function updatePackImpurity(input: UpdatePackImpurityInput): Promis
 
       await transactionManager.getRepository(Audit).save(audit);
 
+      // Sync packsNetWeight on pallets that contain this pack
+      const assignmentPalletIds = normalizeAssignments(pack.palletAssignments).map((a) => a.palletId);
+      const palletsWithPack = await transactionManager
+        .getRepository(Pallet)
+        .createQueryBuilder('pallet')
+        .where('pallet.deletedAt IS NULL')
+        .andWhere(
+          `JSON_SEARCH(pallet.metadata, 'one', :packId, NULL, '$[*].receptionPackId') IS NOT NULL`,
+          { packId: String(pack.id) }
+        )
+        .getMany();
+
+      const palletIdsToSync = [
+        ...new Set([
+          ...assignmentPalletIds,
+          ...palletsWithPack.map((p) => p.id),
+        ]),
+      ];
+      if (palletIdsToSync.length > 0) {
+        await syncPalletsPacksNetWeight(transactionManager, palletIdsToSync);
+      }
+
       console.log(`[updatePackImpurity] Pack ${pack.id} impurity updated: ${oldImpurityPercent}% → ${newImpurityPercent}%, netWeight: ${pack.netWeight} → ${newNetWeight}, totalToPay: ${pack.totalToPay} → ${newTotalToPay}`);
     });
 
@@ -3429,6 +3465,11 @@ export async function assignPackToPallets(input: AssignPackToPalletsInput): Prom
       audit.description = `Asignación de pallets: ${reason.trim()}`;
 
       await transactionManager.getRepository(Audit).save(audit);
+
+      await syncPalletsPacksNetWeight(
+        transactionManager,
+        palletAssignments.map((a) => a.palletId)
+      );
 
       console.log(`[assignPackToPallets] Pack ${pack.id} assigned to pallets: ${finalAssignments.map(formatHistoryEntry).join(', ')}`);
     });

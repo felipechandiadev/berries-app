@@ -45,6 +45,10 @@ export class Pallet {
     @Column({ type: 'decimal', precision: 10, scale: 3, default: 0 })
     dispatchWeight!: number;
 
+    /** Suma de netos de packs prorrateados por bandejas en este pallet */
+    @Column({ type: 'decimal', precision: 10, scale: 3, default: 0 })
+    packsNetWeight!: number;
+
     @Column({ type: 'json', nullable: true })
     metadata?: PalletMetadata;
 

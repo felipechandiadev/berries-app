@@ -3,7 +3,6 @@
 import React from 'react';
 import { SectionProps } from '../types';
 import { SettlementMetadata } from '@/data/entities/Transaction';
-import { PrintProducerSectionButton } from '../PrintProducerSectionButton';
 
 export const SettlementsSection: React.FC<SectionProps> = ({ data }) => {
   const formatCurrency = (amount: number) => {
@@ -14,7 +13,6 @@ export const SettlementsSection: React.FC<SectionProps> = ({ data }) => {
     <div className="h-full overflow-auto">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h3 className="text-lg font-medium">Liquidaciones</h3>
-        <PrintProducerSectionButton data={data} section="settlements" />
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
@@ -22,6 +20,7 @@ export const SettlementsSection: React.FC<SectionProps> = ({ data }) => {
             <tr>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Folio</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Productor</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Anticipos</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recepciones</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
@@ -40,6 +39,9 @@ export const SettlementsSection: React.FC<SectionProps> = ({ data }) => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {new Date(settlement.createdAt).toLocaleDateString('es-CL')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {settlement.producerName}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatCurrency(metadata?.totals?.advancesTotal || 0)}
@@ -62,7 +64,7 @@ export const SettlementsSection: React.FC<SectionProps> = ({ data }) => {
               })
             ) : (
               <tr>
-                <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
+                <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500">
                   No hay liquidaciones registradas
                 </td>
               </tr>

@@ -13,32 +13,32 @@ interface KPICardProps {
 export default function KPICard({ title, value, icon, trend, subtitle }: KPICardProps) {
   const trendColor = trend !== undefined
     ? trend >= 0
-      ? 'text-green-600'
+      ? 'text-[color:var(--color-accent)]'
       : 'text-red-600'
     : 'text-gray-500';
 
-  const trendIcon = trend !== undefined
-    ? trend >= 0
-      ? '↗️'
-      : '↘️'
-    : '';
-
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
+    <div className="rounded-xl border border-[color:var(--dash-line,#E6E8E0)] bg-white p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-gray-600">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-          {subtitle && (
-            <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
-          )}
+          <p className="mt-1 text-2xl font-semibold tracking-tight text-gray-900">{value}</p>
+          {subtitle && <p className="mt-1 text-xs text-gray-500">{subtitle}</p>}
           {trend !== undefined && (
-            <p className={`text-xs font-medium mt-2 ${trendColor}`}>
-              {trendIcon} {Math.abs(trend)}% vs período anterior
+            <p className={`mt-2 inline-flex items-center gap-1 text-xs font-medium ${trendColor}`}>
+              <span className="material-symbols-outlined text-sm">
+                {trend >= 0 ? 'trending_up' : 'trending_down'}
+              </span>
+              {Math.abs(trend)}% vs período anterior
             </p>
           )}
         </div>
-        <div className="text-3xl ml-4">{icon}</div>
+        <span
+          className="material-symbols-outlined rounded-lg bg-[color:var(--dash-soft,#F0F2EA)] p-2 text-[color:var(--dash-accent,#5A8A00)]"
+          aria-hidden
+        >
+          {icon}
+        </span>
       </div>
     </div>
   );

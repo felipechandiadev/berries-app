@@ -10,6 +10,7 @@ export interface PalletRow {
   capacity: number;
   weight: number;
   dispatchWeight: number;
+  packsNetWeight: number;
   status: PalletStatus;
   createdAt: string;
   updatedAt: string;

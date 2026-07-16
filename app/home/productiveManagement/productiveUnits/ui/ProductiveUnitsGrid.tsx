@@ -7,11 +7,16 @@ import IconButton from '@/app/baseComponents/IconButton/IconButton';
 import Dialog from '@/app/baseComponents/Dialog/Dialog';
 import dynamic from 'next/dynamic';
 import { deleteProductiveUnit } from '@/app/actions/productiveUnits';
+import { getProductiveUnitDetailData } from '@/app/actions/productiveUnitDetail';
 import { useAlert } from '@/app/state/hooks/useAlert';
 import { useRouter } from 'next/navigation';
 import type { ProductiveUnitGridData } from '@/app/actions/productiveUnits';
 import CreateProductiveUnitDialog from './CreateProductiveUnitDialog';
 import UpdateProductiveUnitDialog from './UpdateProductiveUnitDialog';
+import {
+  ProductiveUnitDetailLayout,
+  type ProductiveUnitDetailData,
+} from './ProductiveUnitDetail';
 
 // Dynamically import DeleteBaseForm to avoid SSR issues
 const DeleteBaseForm = dynamic(() => import('@/app/baseComponents/BaseForm/DeleteBaseForm'), { ssr: false });
@@ -40,6 +45,32 @@ export default function ProductiveUnitsGrid({ initialData }: ProductiveUnitsGrid
   const [openUpdateDialog, setOpenUpdateDialog] = useState(false);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [openDetailDialog, setOpenDetailDialog] = useState(false);
+  const [selectedUnitDetail, setSelectedUnitDetail] = useState<ProductiveUnitDetailData | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
+  const handleViewDetail = async (unit: ProductiveUnitGridData) => {
+    setLoadingDetail(true);
+    try {
+      const result = await getProductiveUnitDetailData(unit.id);
+      if (result.success && result.data) {
+        setSelectedUnitDetail(result.data);
+        setOpenDetailDialog(true);
+      } else {
+        showError(result.error || 'Error al cargar detalles de la unidad productiva');
+      }
+    } catch {
+      showError('Error inesperado al cargar detalles');
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+
+  const handleCloseDetail = () => {
+    setOpenDetailDialog(false);
+    setSelectedUnitDetail(null);
+  };
 
   const handleEditClick = (unit: ProductiveUnitGridData) => {
     setSelectedUnit(unit);
@@ -113,10 +144,18 @@ export default function ProductiveUnitsGrid({ initialData }: ProductiveUnitsGrid
     {
       field: 'actions',
       headerName: 'Acciones',
-      width: 120,
+      width: 160,
       sortable: false,
       renderCell: ({ row }: RenderCellParams) => (
         <div className="flex gap-1">
+          <IconButton
+            icon="visibility"
+            variant="basicSecondary"
+            size="sm"
+            onClick={() => handleViewDetail(row)}
+            title="Ver detalle"
+            disabled={loadingDetail}
+          />
           {has('PRODUCTIVE_UNITS_UPDATE') && (
             <IconButton
               icon="edit"
@@ -138,7 +177,7 @@ export default function ProductiveUnitsGrid({ initialData }: ProductiveUnitsGrid
         </div>
       ),
     },
-  ], [has]);
+  ], [has, loadingDetail]);
 
   // Grid rows
   const rows = useMemo(() => initialData.data || [], [initialData.data]);
@@ -181,6 +220,35 @@ export default function ProductiveUnitsGrid({ initialData }: ProductiveUnitsGrid
           submitLabel="Eliminar"
           title="Eliminar Unidad Productiva"
         />
+      </Dialog>
+
+      {/* Productive Unit Detail Dialog */}
+      <Dialog
+        open={openDetailDialog}
+        onClose={handleCloseDetail}
+        title=""
+        size="xl"
+        scroll="body"
+        hideActions
+        showCloseButton={true}
+      >
+        {selectedUnitDetail ? (
+          <div className="h-[80vh]">
+            <ProductiveUnitDetailLayout
+              data={selectedUnitDetail}
+              onClose={handleCloseDetail}
+              onRefresh={() => {
+                if (selectedUnitDetail?.unit.id) {
+                  handleViewDetail({ id: selectedUnitDetail.unit.id } as ProductiveUnitGridData);
+                }
+              }}
+            />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        )}
       </Dialog>
     </>
   );

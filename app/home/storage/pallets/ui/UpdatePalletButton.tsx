@@ -121,7 +121,7 @@ export default function UpdatePalletButton({ pallet, onSuccess }: UpdatePalletBu
       },
       {
         name: 'dispatchWeight',
-        label: 'Peso despacho (kg)',
+        label: 'Neto despacho (kg)',
         type: 'number',
         required: true,
         min: 0,
@@ -166,10 +166,6 @@ export default function UpdatePalletButton({ pallet, onSuccess }: UpdatePalletBu
 
     if (Number.isNaN(dispatchWeight) || dispatchWeight < 0) {
       validationErrors.push('El peso de despacho debe ser un número positivo.');
-    }
-
-    if (!Number.isNaN(dispatchWeight) && !Number.isNaN(weight) && dispatchWeight > weight) {
-      validationErrors.push('El peso de despacho no puede ser mayor que el peso inicial.');
     }
 
     if (!status || !Object.values(PalletStatus).includes(status)) {

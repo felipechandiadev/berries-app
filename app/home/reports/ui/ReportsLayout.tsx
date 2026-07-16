@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import ReportSelector from './Sidebar/ReportSelector';
 import DateRangePicker from './Sidebar/DateRangePicker';
 import SeasonSelector from './Sidebar/SeasonSelector';
@@ -21,80 +21,72 @@ export default function ReportsLayout({
   onReportChange,
   onFiltersChange,
 }: ReportsLayoutProps) {
+  const chipActive =
+    'border-[color:var(--dash-ink,#1A1C18)] bg-[color:var(--dash-ink,#1A1C18)] text-white';
+  const chipIdle =
+    'border-gray-300 bg-white text-gray-700 hover:border-[color:var(--dash-accent,#5A8A00)]';
+
   return (
-    <div className="flex h-full bg-gray-50">
-      {/* Sidebar */}
-      <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-6 border-b border-gray-200">
-          <h1 className="text-2xl font-bold text-gray-900">Reportes</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Análisis y métricas del negocio
-          </p>
+    <div className="flex h-full min-h-[70vh] bg-[color:var(--dash-bg,#F7F8F4)]">
+      <div className="flex w-80 flex-col border-r border-gray-200 bg-white">
+        <div className="border-b border-gray-200 p-6">
+          <h1 className="text-2xl font-semibold text-gray-900">Reportes</h1>
+          <p className="mt-1 text-sm text-gray-600">Flujo operativo y económico de la temporada</p>
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="p-6 space-y-6">
-            {/* Period Type Selector */}
+          <div className="space-y-6 p-6">
             <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-4">Filtros</h3>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tipo de período
-                </label>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => onFiltersChange({ periodType: 'custom' })}
-                    className={`px-3 py-2 text-sm font-medium rounded-md ${
-                      filters.periodType === 'custom'
-                        ? 'bg-blue-100 text-blue-700 border-blue-300'
-                        : 'bg-white text-gray-700 border-gray-300'
-                    } border`}
-                  >
-                    Período personalizado
-                  </button>
-                  <button
-                    onClick={() => onFiltersChange({ periodType: 'season' })}
-                    className={`px-3 py-2 text-sm font-medium rounded-md ${
-                      filters.periodType === 'season'
-                        ? 'bg-blue-100 text-blue-700 border-blue-300'
-                        : 'bg-white text-gray-700 border-gray-300'
-                    } border`}
-                  >
-                    Temporada específica
-                  </button>
-                </div>
+              <h3 className="mb-3 text-sm font-medium text-gray-900">Filtros</h3>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Tipo de período</label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => onFiltersChange({ periodType: 'season' })}
+                  className={`rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                    filters.periodType === 'season' ? chipActive : chipIdle
+                  }`}
+                >
+                  Temporada
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onFiltersChange({ periodType: 'custom' })}
+                  className={`rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                    filters.periodType === 'custom' ? chipActive : chipIdle
+                  }`}
+                >
+                  Rango personalizado
+                </button>
               </div>
 
-              {/* Date/Season Pickers */}
-              {filters.periodType === 'custom' ? (
-                <DateRangePicker
-                  startDate={filters.startDate}
-                  endDate={filters.endDate}
-                  onChange={(start: Date | undefined, end: Date | undefined) => onFiltersChange({ startDate: start, endDate: end })}
-                />
-              ) : (
-                <SeasonSelector
-                  selectedSeasonId={filters.seasonId}
-                  onSeasonChange={(seasonId: string | undefined) => onFiltersChange({ seasonId })}
-                />
-              )}
+              <div className="mt-4">
+                {filters.periodType === 'custom' ? (
+                  <DateRangePicker
+                    startDate={filters.startDate}
+                    endDate={filters.endDate}
+                    onChange={(start: Date | undefined, end: Date | undefined) =>
+                      onFiltersChange({ startDate: start, endDate: end })
+                    }
+                  />
+                ) : (
+                  <SeasonSelector
+                    selectedSeasonId={filters.seasonId}
+                    onSeasonChange={(seasonId: string | undefined) =>
+                      onFiltersChange({ seasonId })
+                    }
+                  />
+                )}
+              </div>
             </div>
 
-            {/* Report Selector */}
-            <ReportSelector
-              selectedReport={selectedReport}
-              onReportChange={onReportChange}
-            />
+            <ReportSelector selectedReport={selectedReport} onReportChange={onReportChange} />
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 overflow-hidden">
-        <ReportPreview
-          selectedReport={selectedReport}
-          filters={filters}
-        />
+        <ReportPreview selectedReport={selectedReport} filters={filters} />
       </div>
     </div>
   );
