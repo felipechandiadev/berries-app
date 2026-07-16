@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import mysql from 'mysql2/promise';
 import { getDb } from '@/data/db';
+import { User } from '@/data/entities/User';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -75,7 +76,7 @@ export async function GET() {
 
   try {
     const db = await getDb();
-    const userCount = await db.getRepository('User').count();
+    const userCount = await db.getRepository(User).count();
     const ping = await db.query('SELECT 1 AS ok');
     result.typeorm = { ok: true, userCount, ping };
   } catch (error: any) {
