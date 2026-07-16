@@ -1,0 +1,68 @@
+[
+  {
+    "name": "Gustavo Malicet Sepulveda",
+    "dni": "8.580.604-1",
+    "phone": "981234567",
+    "mail": "gustavo.malicet@example.cl",
+    "productiveUnitName": "Unidad Productiva Ñuble"
+  },
+  {
+    "name": "Cigifredo Inostroza",
+    "dni": "11.769.908-0",
+    "phone": "982345678",
+    "mail": "cigifredo.inostroza@example.cl",
+    "productiveUnitName": "Unidad Productiva Ñuble"
+  },
+  {
+    "name": "Sergio Contreras Bravo",
+    "dni": "11.718.903-4",
+    "phone": "956064657",
+    "mail": "sergio.contreras@example.cl",
+    "productiveUnitName": "Unidad Productiva Maipo"
+  },
+  {
+    "name": "Javier Valenzuela Vallejos",
+    "dni": "10.073.975-5",
+    "phone": "982904004",
+    "mail": "javier.valenzuela@example.cl",
+    "productiveUnitName": "Unidad Productiva Maipo"
+  },
+  {
+    "name": "Juan Fuentes Lopez",
+    "dni": "14.023.791-4",
+    "phone": "967977020",
+    "mail": "juan.fuentes@example.cl",
+    "productiveUnitName": "Unidad Productiva Sur"
+  },
+  {
+    "name": "Ramon Fuentes Villagra",
+    "dni": "6.914.947-2",
+    "phone": "967977020",
+    "mail": "ramon.fuentes@example.cl",
+    "productiveUnitName": "Unidad Productiva Sur"
+  },
+  {
+    "name": "Domingo Maureira Concha",
+    "dni": "76.954.611-8",
+    "phone": "997855208",
+    "mail": "domingo.maureira@example.cl"
+  },
+  {
+    "name": "Juan Mendez Fuentes",
+    "dni": "10.016.718-2",
+    "phone": "989123456",
+    "mail": "juan.mendez@example.cl"
+  },
+  {
+    "name": "Jose Valencia Salazar",
+    "dni": "7.180.161-6",
+    "phone": "982371375",
+    "mail": "jose.valencia@example.cl"
+  },
+  {
+    "name": "Carlos Caceres Ruiz",
+    "dni": "7.903.718-4",
+    "phone": "974285663",
+    "mail": "carlos.caceres@example.cl"
+  }
+]

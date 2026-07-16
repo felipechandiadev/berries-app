@@ -1,0 +1,46 @@
+[
+  {
+    "name": "Verdes",
+    "weight": 0.35,
+    "active": true
+  },
+  {
+    "name": "3/4",
+    "weight": 1.5,
+    "active": true
+  },
+  {
+    "name": "Blancas",
+    "weight": 0.3,
+    "active": true
+  },
+  {
+    "name": "BLANCAS 2025",
+    "weight": 0.25,
+    "active": true
+  },
+  {
+    "name": "AZUL",
+    "weight": 0.3,
+    "active": true,
+    "stock": 1000
+  },
+  {
+    "name": "ARANDANERA",
+    "weight": 0.2,
+    "active": true,
+    "stock": 1000
+  },
+  {
+    "name": "ESPARRAGUERA",
+    "weight": 0.4,
+    "active": true,
+    "stock": 1000
+  },
+  {
+    "name": "NEGRA CHICA",
+    "weight": 0.25,
+    "active": true,
+    "stock": 1000
+  }
+]

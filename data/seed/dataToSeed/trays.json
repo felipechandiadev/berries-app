@@ -1,0 +1,20 @@
+[
+  {
+    "name": "3/4",
+    "weight": 1.5,
+    "active": true,
+    "stock": 100
+  },
+  {
+    "name": "ARANDANERA",
+    "weight": 0.2,
+    "active": true,
+    "stock": 100
+  },
+  {
+    "name": "ESPARRAGUERA",
+    "weight": 0.4,
+    "active": true,
+    "stock": 100
+  }
+]

@@ -1,0 +1,12 @@
+const fs = require('fs');
+const path = require('path');
+const filePath = path.resolve(__dirname, '..', 'lib', 'permissions.ts');
+const s = fs.readFileSync(filePath, 'utf8');
+const valsMatch = s.match(/export const ABILITY_VALUES = \[([\s\S]*?)\] as const;/m);
+const valsRaw = valsMatch ? valsMatch[1].match(/'[^']+'/g) || [] : [];
+const vals = valsRaw.map(v => v.slice(1, -1));
+const defMatches = Array.from(s.matchAll(/\{\s*ability:\s*'([^']+)'/g));
+const defs = defMatches.map(m => m[1]);
+const missingInDefs = vals.filter(v => !defs.includes(v));
+const extraDefs = defs.filter(d => !vals.includes(d));
+console.log(JSON.stringify({ missingInDefs, extraDefs, totalAbilities: vals.length, totalDefinitions: defs.length }, null, 2));

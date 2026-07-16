@@ -1,0 +1,74 @@
+[
+  {
+    "storageName": "Almacen Norte",
+    "trayName": "ARANDANERA",
+    "traysQuantity": 0,
+    "capacity": 60,
+    "weight": 10,
+    "dispatchWeight": 0,
+    "status": "AVAILABLE",
+    "varietyName": "ARANDANOS",
+    "formatName": "IQF",
+    "metadata": { "seeded": true }
+  },
+  {
+    "storageName": "Almacen Norte",
+    "trayName": "ARANDANERA",
+    "traysQuantity": 0,
+    "capacity": 60,
+    "weight": 10,
+    "dispatchWeight": 0,
+    "status": "AVAILABLE",
+    "varietyName": "ARANDANOS",
+    "formatName": "IQF",
+    "metadata": { "seeded": true }
+  },
+  {
+    "storageName": "Almacen Sur",
+    "trayName": "ARANDANERA",
+    "traysQuantity": 0,
+    "capacity": 60,
+    "weight": 10,
+    "dispatchWeight": 0,
+    "status": "AVAILABLE",
+    "varietyName": "ARANDANOS",
+    "formatName": "IQF",
+    "metadata": { "seeded": true }
+  },
+  {
+    "storageName": "Almacen Sur",
+    "trayName": "ARANDANERA",
+    "traysQuantity": 0,
+    "capacity": 60,
+    "weight": 10,
+    "dispatchWeight": 0,
+    "status": "AVAILABLE",
+    "varietyName": "ARANDANOS",
+    "formatName": "IQF",
+    "metadata": { "seeded": true }
+  },
+  {
+    "storageName": "Almacen Central",
+    "trayName": "ARANDANERA",
+    "traysQuantity": 0,
+    "capacity": 60,
+    "weight": 10,
+    "dispatchWeight": 0,
+    "status": "AVAILABLE",
+    "varietyName": "ARANDANOS",
+    "formatName": "IQF",
+    "metadata": { "seeded": true }
+  },
+  {
+    "storageName": "Almacen Central",
+    "trayName": "ARANDANERA",
+    "traysQuantity": 0,
+    "capacity": 60,
+    "weight": 10,
+    "dispatchWeight": 0,
+    "status": "AVAILABLE",
+    "varietyName": "ARANDANOS",
+    "formatName": "IQF",
+    "metadata": { "seeded": true }
+  }
+]

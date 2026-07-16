@@ -1,0 +1,34 @@
+[
+  {
+    "name": "IQF",
+    "description": null,
+    "active": true,
+    "varietyName": "ARANDANOS",
+    "priceCLP": 500,
+    "priceUSD": 0
+  },
+  {
+    "name": "BLOCK",
+    "description": null,
+    "active": true,
+    "varietyName": "ARANDANOS",
+    "priceCLP": 500,
+    "priceUSD": 0
+  },
+  {
+    "name": "JUGO",
+    "description": null,
+    "active": true,
+    "varietyName": "ARANDANOS",
+    "priceCLP": 500,
+    "priceUSD": 0
+  },
+  {
+    "name": "PROCESO",
+    "description": null,
+    "active": true,
+    "varietyName": "ARANDANOS",
+    "priceCLP": 500,
+    "priceUSD": 0
+  }
+]

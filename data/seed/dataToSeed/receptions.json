@@ -1,0 +1,356 @@
+[
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-01",
+    "storageName": "Almacen Norte",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 8,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 14,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 0, "traysAssigned": 5 },
+      { "palletIndex": 1, "traysAssigned": 3 }
+    ],
+    "returnTraysQuantity": 8,
+    "notes": "Seed recepción 01"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-02",
+    "storageName": "Almacen Norte",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 12,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 22,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 1, "traysAssigned": 7 },
+      { "palletIndex": 0, "traysAssigned": 5 }
+    ],
+    "returnTraysQuantity": 12,
+    "notes": "Seed recepción 02"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-03",
+    "storageName": "Almacen Norte",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 6,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 11,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 0, "traysAssigned": 6 }
+    ],
+    "returnTraysQuantity": 6,
+    "notes": "Seed recepción 03"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-04",
+    "storageName": "Almacen Norte",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 15,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 28,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 1, "traysAssigned": 10 },
+      { "palletIndex": 0, "traysAssigned": 5 }
+    ],
+    "returnTraysQuantity": 15,
+    "notes": "Seed recepción 04"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-05",
+    "storageName": "Almacen Norte",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 10,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 18,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 0, "traysAssigned": 4 },
+      { "palletIndex": 1, "traysAssigned": 6 }
+    ],
+    "returnTraysQuantity": 10,
+    "notes": "Seed recepción 05"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-06",
+    "storageName": "Almacen Norte",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 9,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 16,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 1, "traysAssigned": 9 }
+    ],
+    "returnTraysQuantity": 9,
+    "notes": "Seed recepción 06"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-07",
+    "storageName": "Almacen Norte",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 14,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 25,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 0, "traysAssigned": 8 },
+      { "palletIndex": 1, "traysAssigned": 6 }
+    ],
+    "returnTraysQuantity": 14,
+    "notes": "Seed recepción 07"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-08",
+    "storageName": "Almacen Sur",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 11,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 20,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 2, "traysAssigned": 6 },
+      { "palletIndex": 3, "traysAssigned": 5 }
+    ],
+    "returnTraysQuantity": 11,
+    "notes": "Seed recepción 08"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-09",
+    "storageName": "Almacen Sur",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 7,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 13,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 3, "traysAssigned": 7 }
+    ],
+    "returnTraysQuantity": 7,
+    "notes": "Seed recepción 09"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-10",
+    "storageName": "Almacen Sur",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 16,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 30,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 2, "traysAssigned": 9 },
+      { "palletIndex": 3, "traysAssigned": 7 }
+    ],
+    "returnTraysQuantity": 16,
+    "notes": "Seed recepción 10"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-11",
+    "storageName": "Almacen Sur",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 13,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 24,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 3, "traysAssigned": 8 },
+      { "palletIndex": 2, "traysAssigned": 5 }
+    ],
+    "returnTraysQuantity": 13,
+    "notes": "Seed recepción 11"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-12",
+    "storageName": "Almacen Sur",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 8,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 15,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 2, "traysAssigned": 8 }
+    ],
+    "returnTraysQuantity": 8,
+    "notes": "Seed recepción 12"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-13",
+    "storageName": "Almacen Sur",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 18,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 34,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 2, "traysAssigned": 10 },
+      { "palletIndex": 3, "traysAssigned": 8 }
+    ],
+    "returnTraysQuantity": 18,
+    "notes": "Seed recepción 13"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-14",
+    "storageName": "Almacen Sur",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 10,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 19,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 3, "traysAssigned": 4 },
+      { "palletIndex": 2, "traysAssigned": 6 }
+    ],
+    "returnTraysQuantity": 10,
+    "notes": "Seed recepción 14"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-15",
+    "storageName": "Almacen Central",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 12,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 21,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 4, "traysAssigned": 7 },
+      { "palletIndex": 5, "traysAssigned": 5 }
+    ],
+    "returnTraysQuantity": 12,
+    "notes": "Seed recepción 15"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-16",
+    "storageName": "Almacen Central",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 9,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 17,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 5, "traysAssigned": 9 }
+    ],
+    "returnTraysQuantity": 9,
+    "notes": "Seed recepción 16"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-17",
+    "storageName": "Almacen Central",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 14,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 26,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 4, "traysAssigned": 8 },
+      { "palletIndex": 5, "traysAssigned": 6 }
+    ],
+    "returnTraysQuantity": 14,
+    "notes": "Seed recepción 17"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-18",
+    "storageName": "Almacen Central",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 7,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 12,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 4, "traysAssigned": 7 }
+    ],
+    "returnTraysQuantity": 7,
+    "notes": "Seed recepción 18"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-19",
+    "storageName": "Almacen Central",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 11,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 20,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 5, "traysAssigned": 6 },
+      { "palletIndex": 4, "traysAssigned": 5 }
+    ],
+    "returnTraysQuantity": 11,
+    "notes": "Seed recepción 19"
+  },
+  {
+    "producerName": "Carlos Caceres Ruiz",
+    "date": "2026-06-20",
+    "storageName": "Almacen Central",
+    "trayName": "ARANDANERA",
+    "varietyName": "ARANDANOS",
+    "formatName": "BLOCK",
+    "traysQuantity": 16,
+    "unitTrayWeight": 0.2,
+    "grossWeight": 32,
+    "pricePerKg": 500,
+    "palletAssignments": [
+      { "palletIndex": 4, "traysAssigned": 9 },
+      { "palletIndex": 5, "traysAssigned": 7 }
+    ],
+    "returnTraysQuantity": 16,
+    "notes": "Seed recepción 20"
+  }
+]

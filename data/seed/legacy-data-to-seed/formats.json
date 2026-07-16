@@ -1,0 +1,22 @@
+[
+  {
+    "name": "IQF",
+    "description": null,
+    "active": true
+  },
+  {
+    "name": "BLOCK",
+    "description": null,
+    "active": true
+  },
+  {
+    "name": "JUGO",
+    "description": null,
+    "active": true
+  },
+  {
+    "name": "PROCESO",
+    "description": null,
+    "active": true
+  }
+]

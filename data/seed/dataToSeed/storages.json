@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Almacen Norte",
+    "capacityPallets": 10,
+    "location": "Sector Norte",
+    "active": true
+  },
+  {
+    "name": "Almacen Sur",
+    "capacityPallets": 10,
+    "location": "Sector Sur",
+    "active": true
+  },
+  {
+    "name": "Almacen Central",
+    "capacityPallets": 10,
+    "location": "Sector Central",
+    "active": true
+  }
+]
