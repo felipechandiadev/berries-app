@@ -209,7 +209,7 @@ export const authOptions: NextAuthOptions = {
       }
       return session;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.userId = user.id;
         token.sub = user.id;
@@ -219,7 +219,13 @@ export const authOptions: NextAuthOptions = {
         token.permissions = Array.isArray((user as any).permissions) ? (user as any).permissions : token.permissions;
       }
 
-      if (token.sub) {
+      // Only refresh role/permissions from DB on sign-in / explicit update.
+      // Hitting the DB on every getServerSession (e.g. inside server actions)
+      // deadlocks when a transaction already holds the pool connection.
+      const shouldRefreshFromDb =
+        Boolean(user) || trigger === 'signIn' || trigger === 'update';
+
+      if (shouldRefreshFromDb && token.sub) {
         try {
           const db = await getDb();
           const userRepo = db.getRepository(User);
@@ -228,14 +234,12 @@ export const authOptions: NextAuthOptions = {
             token.role = dbUser.rol;
           }
 
-          if (!Array.isArray(token.permissions)) {
-            const permissionRepo = db.getRepository(Permission);
-            const dbPermissions = await permissionRepo.find({
-              select: ['ability'],
-              where: { userId: token.sub },
-            });
-            token.permissions = dbPermissions.map((permission) => permission.ability);
-          }
+          const permissionRepo = db.getRepository(Permission);
+          const dbPermissions = await permissionRepo.find({
+            select: ['ability'],
+            where: { userId: token.sub },
+          });
+          token.permissions = dbPermissions.map((permission) => permission.ability);
         } catch (error) {
           console.error('[authOptions.jwt] Error fetching user role from DB:', error);
         }

@@ -220,16 +220,6 @@ const toCurrencyEnum = (value: unknown): Currency | null => {
 
 async function resolveUser(manager: EntityManager, explicitUserId?: string): Promise<ResolvedUser> {
   let userId: string | undefined = explicitUserId;
-
-  if (!userId) {
-    try {
-      const { userId: sessionUserId } = await getCurrentUserSession();
-      userId = sessionUserId;
-    } catch (error) {
-      // Ignored: fall back to first user if not available
-    }
-  }
-
   let user: User | null = null;
 
   if (userId) {
@@ -292,10 +282,23 @@ export async function processReception(input: ProcessReceptionInput): Promise<Pr
       return { success: false, error: 'Debes registrar al menos un pack para procesar la recepción.' };
     }
 
+    // Resolve session BEFORE opening a DB transaction. getServerSession can hit
+    // auth JWT callbacks that query the DB; doing that inside a transaction with
+    // a small pool deadlocks and leaves the UI stuck on "Guardando…".
+    let sessionUserId = input.userId;
+    if (!sessionUserId) {
+      try {
+        const session = await getCurrentUserSession();
+        sessionUserId = session.userId;
+      } catch {
+        sessionUserId = undefined;
+      }
+    }
+
     const db: DataSource = await getDb();
 
     const result = await db.transaction(async (manager) => {
-      const user = await resolveUser(manager, input.userId);
+      const user = await resolveUser(manager, sessionUserId);
       const season = await resolveActiveSeason(manager);
       const producerData = await resolveProducer(manager, input.producer);
 
@@ -811,6 +814,17 @@ export async function removeReceptionPack(input: RemoveReceptionPackInput): Prom
   }
 
   try {
+    // Resolve session before the transaction to avoid DB pool deadlocks with auth callbacks.
+    let sessionUserId = input.userId;
+    if (!sessionUserId) {
+      try {
+        const session = await getCurrentUserSession();
+        sessionUserId = session.userId;
+      } catch {
+        sessionUserId = undefined;
+      }
+    }
+
     const db = await getDb();
     const queryRunner = db.createQueryRunner();
     await queryRunner.connect();
@@ -832,7 +846,7 @@ export async function removeReceptionPack(input: RemoveReceptionPackInput): Prom
         return { success: false, error: 'La recepción no existe o ya fue eliminada.' };
       }
 
-      const user = await resolveUser(manager, input.userId);
+      const user = await resolveUser(manager, sessionUserId);
       const now = new Date();
       const nowIso = now.toISOString();
 
@@ -2356,6 +2370,16 @@ export async function deleteReception(receptionId: string, auditUserId?: string)
 
     const dataSource = await getDb();
 
+    let resolvedAuditUserId = auditUserId;
+    if (!resolvedAuditUserId) {
+      try {
+        const session = await getCurrentUserSession();
+        resolvedAuditUserId = session.userId;
+      } catch {
+        resolvedAuditUserId = undefined;
+      }
+    }
+
     await dataSource.transaction(async (manager) => {
       const reception = await manager.getRepository(Transaction).findOne({
         where: { id: receptionIdBigInt, type: TransactionType.RECEPTION },
@@ -2414,15 +2438,7 @@ export async function deleteReception(receptionId: string, auditUserId?: string)
       await manager.getRepository(ReceptionPack).delete({ receptionTransactionId: receptionId });
 
       // Auditoría de eliminación de recepción
-      let userId = auditUserId;
-      if (!userId) {
-        try {
-          const { userId: sessionUserId } = await getCurrentUserSession();
-          userId = sessionUserId;
-        } catch (error) {
-          userId = undefined;
-        }
-      }
+      const userId = resolvedAuditUserId;
       await manager.insert(Audit, {
         entityName: 'Transaction',
         entityId: receptionId,

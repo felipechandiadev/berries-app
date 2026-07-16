@@ -99,9 +99,10 @@ const getDbConfig = () => {
           rejectUnauthorized,
         }
       : undefined,
-    // Vercel serverless: keep the pool tiny; large pools cause flaky connects
+    // Keep a small pool: limit 1 deadlocks when a transaction holds the only
+    // connection and session/auth callbacks try to query the DB.
     extra: {
-      connectionLimit: 1,
+      connectionLimit: 5,
       waitForConnections: true,
       queueLimit: 0,
       enableKeepAlive: true,
@@ -114,6 +115,8 @@ const getDbConfig = () => {
 
 let globalDataSource: DataSource | null = null;
 let initializationPromise: Promise<DataSource> | null = null;
+let lastPingAt = 0;
+const PING_INTERVAL_MS = 30_000;
 
 export const getDb = async (retries: number = 0): Promise<DataSource> => {
   const MAX_RETRIES = 3;
@@ -130,6 +133,7 @@ export const getDb = async (retries: number = 0): Promise<DataSource> => {
         console.log("[DB] Inicializando DataSource...");
         initializationPromise = globalDataSource.initialize().then((ds) => {
           console.log("[DB] ✅ DataSource inicializado correctamente");
+          lastPingAt = Date.now();
           return ds;
         }).catch((err) => {
           initializationPromise = null;
@@ -137,9 +141,10 @@ export const getDb = async (retries: number = 0): Promise<DataSource> => {
         });
       }
       await initializationPromise;
-    } else {
+    } else if (Date.now() - lastPingAt > PING_INTERVAL_MS) {
       try {
         await globalDataSource.query("SELECT 1");
+        lastPingAt = Date.now();
       } catch (pingError: any) {
         console.warn("[DB] Conexión existente falló el ping, re-inicializando...", pingError?.message);
         try {
@@ -148,6 +153,7 @@ export const getDb = async (retries: number = 0): Promise<DataSource> => {
           globalDataSource = new DataSource(getDbConfig());
           initializationPromise = globalDataSource.initialize();
           await initializationPromise;
+          lastPingAt = Date.now();
           console.log("[DB] ✅ DataSource re-inicializado correctamente tras fallo de ping");
         } catch (reinitError) {
           console.error("[DB] Error crítico re-inicializando tras fallo de ping:", reinitError);
