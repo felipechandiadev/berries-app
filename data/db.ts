@@ -27,11 +27,28 @@ const parseBoolean = (value: string | undefined, fallback = false): boolean => {
 };
 
 const getDbConfig = () => {
-  const host = process.env.DB_HOST || "localhost";
-  const port = process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306;
-  const username = process.env.DB_USER || process.env.DB_USERNAME || "root";
-  const password = process.env.DB_PASSWORD || "";
-  const database = process.env.DB_NAME || process.env.DB_DATABASE || "next-start";
+  // Prefer DB_*; fall back to DATABASE_* (common in Vercel dashboards)
+  const host =
+    process.env.DB_HOST ||
+    process.env.DATABASE_HOST ||
+    "localhost";
+  const port = Number(
+    process.env.DB_PORT || process.env.DATABASE_PORT || 3306
+  );
+  const username =
+    process.env.DB_USER ||
+    process.env.DB_USERNAME ||
+    process.env.DATABASE_USER ||
+    "root";
+  const password =
+    process.env.DB_PASSWORD ||
+    process.env.DATABASE_PASSWORD ||
+    "";
+  const database =
+    process.env.DB_NAME ||
+    process.env.DB_DATABASE ||
+    process.env.DATABASE_NAME ||
+    "next-start";
   const synchronize = parseBoolean(process.env.DB_SYNCHRONIZE, false);
   const logging = parseBoolean(process.env.DB_LOGGING, false);
   const useSsl = parseBoolean(process.env.DB_SSL, false);
