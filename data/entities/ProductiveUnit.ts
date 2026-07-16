@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn, OneToMany } from 'typeorm';
+import { Producer } from './Producer';
 
 @Entity('productive_units')
 export class ProductiveUnit {
@@ -12,9 +13,8 @@ export class ProductiveUnit {
     @Column('varchar', { length: 500, nullable: true })
     location?: string;
 
-    // Relación lazy para evitar dependencia circular
-    @OneToMany('Producer', 'productiveUnit')
-    producers?: any[];
+    @OneToMany(() => Producer, (producer) => producer.productiveUnit)
+    producers?: Producer[];
 
     @CreateDateColumn()
     createdAt!: Date;

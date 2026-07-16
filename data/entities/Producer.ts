@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, DeleteDateColumn, CreateDateColumn, UpdateDateColumn, JoinColumn } from "typeorm";
 import { Person } from "./Person";
+import { ProductiveUnit } from "./ProductiveUnit";
 
 @Entity("producers")
 export class Producer {
@@ -32,10 +33,13 @@ export class Producer {
     @Column({ type: 'varchar', length: 36, nullable: true })
     productiveUnitId?: string;
 
-    // Relación lazy para evitar dependencia circular
-    @ManyToOne('ProductiveUnit', 'producers', { nullable: true, onDelete: 'SET NULL' })
+    // Class refs (not string names) — string entity names break under Vercel minification
+    @ManyToOne(() => ProductiveUnit, (unit) => unit.producers, {
+        nullable: true,
+        onDelete: 'SET NULL',
+    })
     @JoinColumn({ name: 'productiveUnitId' })
-    productiveUnit?: any;
+    productiveUnit?: ProductiveUnit;
 
     @CreateDateColumn()
     createdAt!: Date;
