@@ -39,7 +39,14 @@ function formatAssignments(assignments: ReceptionDetailPalletAssignment[]): stri
   }
 
   return assignments.map((assignment) => {
-    return `Pallet ${assignment.palletId} · ${assignment.traysAssigned} bandejas`;
+    const kg =
+      assignment.grossWeightKg && assignment.grossWeightKg > 0
+        ? ` · ${assignment.grossWeightKg.toLocaleString('es-CL', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })} kg`
+        : '';
+    return `Pallet ${assignment.palletId} · ${assignment.traysAssigned} bandejas${kg}`;
   });
 }
 

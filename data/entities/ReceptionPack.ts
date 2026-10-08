@@ -5,6 +5,8 @@ import { Currency } from './Variety';
 export interface ReceptionPackPalletAssignment {
     palletId: number;
     traysAssigned: number;
+    /** Kg brutos de esta línea de pallet (opcional; datos nuevos). */
+    grossWeightKg?: number;
 }
 
 export type ReceptionPackAssignments = ReceptionPackPalletAssignment[];

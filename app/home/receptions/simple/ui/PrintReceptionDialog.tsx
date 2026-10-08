@@ -1,9 +1,21 @@
 "use client";
-import React, { useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import DialogToPrint from '@/app/baseComponents/Dialog/DialogToPrint';
 import type { ReceptionDataSnapshot, ReceptionTotals, ReceptionPackSummary } from './TransactionData';
 import type { TrayDevolutionItem } from './TrayDevolutionContainer';
 import { Currency } from '@/data/entities/Variety';
+import {
+  aggregatePalletLines,
+  buildReceptionTicketEscPos,
+  getDefaultReceptionPrintOptions,
+  loadReceptionPrintOptions,
+  printRaw,
+  resolveReceptionTicketDate,
+  resolveTicketHeaderParties,
+  saveReceptionPrintOptions,
+  type ReceptionPrintOptions,
+} from '@/lib/printing';
+import PrintOptionsPanel from '@/app/home/receptions/receptions/ui/PrintOptionsPanel';
 
 interface PrintReceptionDialogProps {
   open: boolean;
@@ -78,6 +90,21 @@ const PrintReceptionDialog: React.FC<PrintReceptionDialogProps> = ({
   const trayDevolutions: TrayDevolutionItem[] = Array.isArray(data?.trayDevolutions)
     ? data.trayDevolutions
     : [];
+  const [printOptions, setPrintOptions] = useState<ReceptionPrintOptions>(
+    getDefaultReceptionPrintOptions
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    setPrintOptions(loadReceptionPrintOptions());
+  }, [open]);
+
+  const handlePrintOptionsChange = useCallback((next: ReceptionPrintOptions) => {
+    setPrintOptions(next);
+    saveReceptionPrintOptions(next);
+  }, []);
+
+  const palletLines = useMemo(() => aggregatePalletLines(packs), [packs]);
   const currencyBreakdown = useMemo(() => {
     const clpFromTotals = Math.max(0, totals?.totalToPayCLP ?? 0);
     const usdFromTotals = Math.max(0, totals?.totalToPayUSD ?? 0);
@@ -133,29 +160,36 @@ const PrintReceptionDialog: React.FC<PrintReceptionDialogProps> = ({
     };
   }, [data?.exchangeRate, packs, totals]);
 
-  const printedAt = useMemo(() => new Date(), [open, receptionTransactionId]);
+  const receptionDate = useMemo(
+    () => resolveReceptionTicketDate(data?.createdAt),
+    [data?.createdAt, open, receptionTransactionId]
+  );
 
   const formattedDate = useMemo(() => (
-    new Intl.DateTimeFormat('es-CL', { dateStyle: 'short' }).format(printedAt)
-  ), [printedAt]);
+    new Intl.DateTimeFormat('es-CL', { dateStyle: 'short' }).format(receptionDate)
+  ), [receptionDate]);
 
   const formattedTime = useMemo(() => (
     new Intl.DateTimeFormat('es-CL', { 
       timeStyle: 'short',
       hour12: false 
-    }).format(printedAt)
-  ), [printedAt]);
+    }).format(receptionDate)
+  ), [receptionDate]);
 
-  const producerInfo = useMemo(() => {
-    const label = data?.producer?.label ?? '';
-    if (!label) return { name: '—', dni: '—' };
-    
-    const parts = label.split(' - ');
-    return {
-      name: parts[0] || '—',
-      dni: parts[1] || '—',
-    };
-  }, [data?.producer?.label]);
+  const ticketParties = useMemo(
+    () =>
+      resolveTicketHeaderParties({
+        producer: data?.producer
+          ? {
+              label: data.producer.label,
+              productiveUnitId: data.producer.productiveUnitId,
+              productiveUnitName: data.producer.productiveUnitName,
+            }
+          : null,
+        driver: data?.driver,
+      }),
+    [data?.producer, data?.driver]
+  );
 
   const totalTraysReturned = useMemo(() => (
     trayDevolutions.reduce((sum, item) => sum + (item.quantity ?? 0), 0)
@@ -249,33 +283,21 @@ const PrintReceptionDialog: React.FC<PrintReceptionDialogProps> = ({
       });
     }
 
-    rows.push({
-      key: 'totalClp',
-      label: 'Total CLP',
-      value: formatCurrency(currencyBreakdown.clp, Currency.CLP),
-    });
+    if (printOptions.showPrices) {
+      rows.push({
+        key: 'totalClp',
+        label: 'Total CLP',
+        value: formatCurrency(currencyBreakdown.clp, Currency.CLP),
+      });
 
-    rows.push({
-      key: 'totalUsd',
-      label: 'Total USD',
-      value: formatCurrency(currencyBreakdown.usd, Currency.USD),
-    });
+      rows.push({
+        key: 'totalUsd',
+        label: 'Total USD',
+        value: formatCurrency(currencyBreakdown.usd, Currency.USD),
+      });
+    }
 
-    // rows.push({
-    //   key: 'exchangeRate',
-    //   label: 'Cambio',
-    //   value: currencyBreakdown.exchangeRate > 0
-    //     ? `${formatNumber(currencyBreakdown.exchangeRate, 2)} CLP/USD`
-    //     : '—',
-    // });
-
-    // rows.push({
-    //   key: 'totalToPay',
-    //   label: 'Total a pagar',
-    //   value: formatCurrency(currencyBreakdown.total, Currency.CLP),
-    // });
-
-    if (totalTraysReturned > 0) {
+    if (printOptions.showTrayDevolutions && totalTraysReturned > 0) {
       rows.push({
         key: 'returnedTrays',
         label: 'Bandejas devueltas',
@@ -284,7 +306,7 @@ const PrintReceptionDialog: React.FC<PrintReceptionDialogProps> = ({
     }
 
     return rows;
-  }, [receptionMetadata, totals, totalTraysReturned]);
+  }, [receptionMetadata, totals, totalTraysReturned, currencyBreakdown, printOptions.showPrices, printOptions.showTrayDevolutions]);
 
   // Estilos específicos para impresión en papel térmico de 80mm
   const thermalPrintStyles = `
@@ -306,24 +328,49 @@ const PrintReceptionDialog: React.FC<PrintReceptionDialogProps> = ({
     }
   `;
 
+  const handlePrintTicket = useCallback(async () => {
+    const bytes = await buildReceptionTicketEscPos(
+      data,
+      receptionTransactionId,
+      new Date(),
+      printOptions
+    );
+    await printRaw(bytes, { requestIfMissing: true });
+  }, [data, receptionTransactionId, printOptions]);
+
   return (
     <DialogToPrint
       open={open}
       onClose={onClose}
       title="Recibo de recepción"
-      size="xs"
+      size="sm"
       contentClassName="bg-white"
       printLabel="Imprimir recibo"
       onBeforePrint={onClose}
       printStyles={thermalPrintStyles}
+      onPrintTicket={handlePrintTicket}
+      ticketLabel="Ticket USB"
+      controls={
+        <PrintOptionsPanel options={printOptions} onChange={handlePrintOptionsChange} />
+      }
     >
       <div
         className="flex flex-col gap-1 text-[13px] leading-tight text-foreground"
         style={{ width: '76mm', maxWidth: '76mm', padding: '0' }}
       >
-        <header className="text-left">
-          <h1 className="text-xl font-semibold uppercase">ZENIZ</h1>
+        <header className="flex flex-col items-center gap-1 text-center">
           <p className="text-[13px]">Comprobante recepción</p>
+          {printOptions.showLogo ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logoPrint.png"
+                alt="Zeniz"
+                className="h-auto w-[14mm] object-contain"
+              />
+            </>
+          ) : null}
+          <p className="text-[18px] font-bold tracking-wide">ZENIZ</p>
         </header>
 
         <section className="flex flex-col border-t border-dashed border-border pt-1">
@@ -341,12 +388,29 @@ const PrintReceptionDialog: React.FC<PrintReceptionDialogProps> = ({
           </div>
           <div className="text-[13px]">
             <span>Productor: </span>
-            <span>{producerInfo.name}</span>
+            <span>{ticketParties.displayProducerName}</span>
           </div>
           <div className="text-[13px]">
             <span>RUT: </span>
-            <span>{producerInfo.dni}</span>
+            <span>{ticketParties.displayProducerDni}</span>
           </div>
+          {printOptions.showGuideDriver && data.guide ? (
+            <div className="text-[13px]">
+              <span>Guía: </span>
+              <span>{data.guide}</span>
+            </div>
+          ) : null}
+          {ticketParties.hasProductiveUnit && ticketParties.deliveredBy ? (
+            <div className="text-[13px]">
+              <span>Entregada por: </span>
+              <span>{ticketParties.deliveredBy}</span>
+            </div>
+          ) : printOptions.showGuideDriver && ticketParties.deliveredBy ? (
+            <div className="text-[13px]">
+              <span>Entregada por: </span>
+              <span>{ticketParties.deliveredBy}</span>
+            </div>
+          ) : null}
         </section>
 
         <section className="border-t border-dashed border-border pt-1">
@@ -361,7 +425,71 @@ const PrintReceptionDialog: React.FC<PrintReceptionDialogProps> = ({
           </div>
         </section>
 
-        {trayDevolutions.length > 0 ? (
+        {printOptions.showPackDetails && packs.length > 0 ? (
+          <section className="border-t border-dashed border-border pt-1">
+            <h4 className="text-left text-[13px] font-semibold uppercase">
+              Packs ({packs.length})
+            </h4>
+            {packs.map((pack, index) => (
+              <div
+                key={pack.id ?? index}
+                className="mb-1 border-b border-dotted border-border pb-1 text-[12px]"
+              >
+                <div className="font-medium">Pack #{pack.packNumber || index + 1}</div>
+                <div>
+                  <span>Variedad: </span>
+                  <span>{pack.varietyName || '—'}</span>
+                </div>
+                <div>
+                  <span>Bandeja: </span>
+                  <span>{pack.trayLabel || '—'}</span>
+                </div>
+                <div>
+                  <span>Cant: </span>
+                  <span>{pack.traysQuantity || 0} uds</span>
+                </div>
+                <div>
+                  <span>P.Neto: </span>
+                  <span>{formatNumber(pack.netWeight ?? 0)} kg</span>
+                </div>
+                {printOptions.showPrices ? (
+                  <div>
+                    <span>Total: </span>
+                    <span>{formatCurrency(pack.totalToPay ?? 0, pack.currency)}</span>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </section>
+        ) : null}
+
+        {printOptions.showPallets ? (
+          <section className="border-t border-dashed border-border pt-1">
+            <h4 className="text-left text-[13px] font-semibold uppercase">Pallets</h4>
+            <div className="flex flex-col text-[13px]">
+              {palletLines.length > 0 ? (
+                palletLines.map((line) => (
+                  <div key={line.palletId} className="text-left">
+                    <span>Pallet #{line.palletId}: </span>
+                    <span>
+                      {formatNumber(line.traysAssigned, 0)} ban.
+                      {line.grossWeightKg > 0
+                        ? ` · ${formatNumber(line.grossWeightKg, 2)} kg`
+                        : ''}
+                      {line.packNumbers.length
+                        ? ` (pack ${line.packNumbers.join(',')})`
+                        : ''}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-left text-muted-foreground">Sin asignación a pallets</div>
+              )}
+            </div>
+          </section>
+        ) : null}
+
+        {printOptions.showTrayDevolutions && trayDevolutions.length > 0 ? (
           <section className="border-t border-dashed border-border pt-1">
             <h4 className="text-left text-[13px] font-semibold uppercase">Devolución de bandejas</h4>
             <div className="flex flex-col text-[13px]">

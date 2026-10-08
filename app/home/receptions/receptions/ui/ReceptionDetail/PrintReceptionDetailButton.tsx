@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import DialogToPrint from "@/app/baseComponents/Dialog/DialogToPrint";
 import IconButton from "@/app/baseComponents/IconButton/IconButton";
 import { Currency } from "@/data/entities/Variety";
+import { aggregatePalletLines } from "@/lib/printing";
 import type { ReceptionDetailData } from "./types";
 
 const printStyles = `
@@ -132,18 +133,26 @@ function calculateTotals(data: ReceptionDetailData) {
 export function PrintReceptionDetailButton({ data }: PrintReceptionDetailButtonProps) {
   const [open, setOpen] = useState(false);
 
-  const printedAt = useMemo(() => new Date(), [open]);
+  const receptionDate = useMemo(() => {
+    if (data.summary.createdAt) {
+      const parsed = new Date(data.summary.createdAt);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+    return new Date();
+  }, [data.summary.createdAt, open]);
   const formattedPrintedDate = useMemo(
-    () => new Intl.DateTimeFormat("es-CL", { dateStyle: "long" }).format(printedAt),
-    [printedAt]
+    () => new Intl.DateTimeFormat("es-CL", { dateStyle: "long" }).format(receptionDate),
+    [receptionDate]
   );
   const formattedPrintedTime = useMemo(
     () =>
       new Intl.DateTimeFormat("es-CL", {
         timeStyle: "short",
         hour12: false,
-      }).format(printedAt),
-    [printedAt]
+      }).format(receptionDate),
+    [receptionDate]
   );
 
   const aggregatedTotals = useMemo(() => {
@@ -228,6 +237,17 @@ export function PrintReceptionDetailButton({ data }: PrintReceptionDetailButtonP
   const handleOpen = () => setOpen(true);
   const handleClose = () => setOpen(false);
   const totalsForDisplay = useMemo(() => calculateTotals(data), [data]);
+
+  const palletLines = useMemo(
+    () =>
+      aggregatePalletLines(
+        data.packs.map((pack) => ({
+          packNumber: pack.packNumber,
+          palletAssignments: pack.palletAssignments,
+        }))
+      ),
+    [data.packs]
+  );
 
   return (
     <>
@@ -339,6 +359,47 @@ export function PrintReceptionDetailButton({ data }: PrintReceptionDetailButtonP
                       <td className="px-4 py-1">{formatCurrency(pack.totalToPay, normalizeCurrency(pack.currency))}</td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* Pallets */}
+          <section>
+            <h3 className="mb-1 font-semibold text-gray-900">Pallets asociados</h3>
+            <div className="overflow-hidden border border-gray-200">
+              <table className="w-full text-[9px] text-left">
+                <thead className="bg-gray-100 text-gray-700 font-semibold border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-1">Pallet</th>
+                    <th className="px-4 py-1">Bandejas</th>
+                    <th className="px-4 py-1">Kg brutos</th>
+                    <th className="px-4 py-1">Packs</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white">
+                  {palletLines.length > 0 ? (
+                    palletLines.map((line) => (
+                      <tr key={line.palletId} className="border-b border-gray-200">
+                        <td className="px-4 py-1">#{line.palletId}</td>
+                        <td className="px-4 py-1">{formatNumber(line.traysAssigned, 0)}</td>
+                        <td className="px-4 py-1">
+                          {line.grossWeightKg > 0
+                            ? `${formatNumber(line.grossWeightKg)} kg`
+                            : "—"}
+                        </td>
+                        <td className="px-4 py-1">
+                          {line.packNumbers.length ? line.packNumbers.join(", ") : "—"}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td className="px-4 py-1 text-gray-500" colSpan={4}>
+                        Sin asignación a pallets
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

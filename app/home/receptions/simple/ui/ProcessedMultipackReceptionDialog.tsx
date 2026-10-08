@@ -100,6 +100,9 @@ const ProcessedMultipackReceptionDialog: React.FC<ProcessedMultipackReceptionDia
         palletAssignments: (pack.palletAssignments ?? []).map((assignment) => ({
           palletId: assignment.palletId,
           traysAssigned: assignment.traysAssigned,
+          ...(assignment.grossWeightKg && assignment.grossWeightKg > 0
+            ? { grossWeightKg: assignment.grossWeightKg }
+            : {}),
         })),
       }));
       // Calcular totales requeridos
@@ -114,7 +117,18 @@ const ProcessedMultipackReceptionDialog: React.FC<ProcessedMultipackReceptionDia
         totalCLPToPay: packInputs.filter(p => p.currency === Currency.CLP).reduce((sum, p) => sum + (p.totalToPay || 0), 0) + packInputs.filter(p => p.currency === Currency.USD).reduce((sum, p) => sum + (p.totalToPay || 0), 0) * (snapshot?.exchangeRate || 0),
       };
       const payload = {
-        producer: snapshot?.producer ? { id: snapshot.producer.id, label: snapshot.producer.label } : null,
+        producer: snapshot?.producer
+          ? {
+              id: snapshot.producer.id,
+              label: snapshot.producer.label,
+              ...(snapshot.producer.productiveUnitId
+                ? { productiveUnitId: snapshot.producer.productiveUnitId }
+                : {}),
+              ...(snapshot.producer.productiveUnitName
+                ? { productiveUnitName: snapshot.producer.productiveUnitName }
+                : {}),
+            }
+          : null,
         guide: snapshot?.guide ?? '',
         driver: snapshot?.driver ?? '',
         packs: packInputs,

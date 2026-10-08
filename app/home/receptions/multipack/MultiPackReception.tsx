@@ -5,7 +5,10 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import DetailReceptionCard from '../simple/ui/DetailReceptionCard';
 import TrayDevolutionCard, { type TrayOption } from '../simple/ui/detailCardComponents/TrayDevolutionCard';
-import type { ReceptionDataSnapshot } from '../simple/ui/TransactionData';
+import type {
+  ReceptionDataSnapshot,
+  ReceptionProducerOption,
+} from '../simple/ui/TransactionData';
 import { getVarieties } from '@/app/actions/varieties';
 import { getFormats } from '@/app/actions/formats';
 import { getTrays } from '@/app/actions/trays';
@@ -14,7 +17,7 @@ import { Button } from '@/app/baseComponents/Button/Button';
 import ProcessedMultipackReceptionDialog from '../simple/ui/ProcessedMultipackReceptionDialog';
 import PrintMultipackReceptionDialog from './ui/PrintMultipackReceptionDialog';
 import { EMPTY_TOTALS } from '../simple/ui/ProcessedReceptionDialog';
-import AutoComplete, { Option } from '@/app/baseComponents/AutoComplete/AutoComplete';
+import AutoComplete from '@/app/baseComponents/AutoComplete/AutoComplete';
 import { TextField } from '@/app/baseComponents/TextField/TextField';
 import { useAlert } from '@/app/state/contexts/AlertContext';
 import { Currency } from '@/data/entities/Variety';
@@ -110,8 +113,8 @@ const MultiPackReception: React.FC = () => {
   }, [packs, trayDevolutions]);
 
   // Estado de los campos superiores
-  const [producer, setProducer] = useState<Option | null>(null);
-  const [producerOptions, setProducerOptions] = useState<Option[]>([]);
+  const [producer, setProducer] = useState<ReceptionProducerOption | null>(null);
+  const [producerOptions, setProducerOptions] = useState<ReceptionProducerOption[]>([]);
   const [guide, setGuide] = useState("");
   const [deliverer, setDeliverer] = useState("");
 
@@ -119,13 +122,16 @@ const MultiPackReception: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const { getProducersGridData } = await import('@/app/actions/producers');
-        const res = await getProducersGridData({ page: 1, limit: 100, sortBy: 'name', sortOrder: 'ASC' });
-        if (res.success && Array.isArray(res.data)) {
-          setProducerOptions(res.data.map((prod: any) => ({ id: prod.id, label: prod.name })));
-        } else {
-          setProducerOptions([]);
-        }
+        const { getProducersSimpleListWithLabel } = await import('@/app/actions/producers');
+        const list = await getProducersSimpleListWithLabel();
+        setProducerOptions(
+          list.map((prod) => ({
+            id: prod.id,
+            label: prod.label,
+            ...(prod.productiveUnitId ? { productiveUnitId: prod.productiveUnitId } : {}),
+            ...(prod.productiveUnitName ? { productiveUnitName: prod.productiveUnitName } : {}),
+          }))
+        );
       } catch (e) {
         setProducerOptions([]);
       }
@@ -438,6 +444,15 @@ const MultiPackReception: React.FC = () => {
           })()}
         </div>
       </div>
+      {producer?.productiveUnitName ? (
+        <div className="rounded-lg border border-border bg-white p-4 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-wider text-gray-500">
+            Unidad productiva
+          </p>
+          <p className="mt-1 text-lg font-semibold text-gray-900">{producer.productiveUnitName}</p>
+        </div>
+      ) : null}
+
       {/* Botón para procesar recepción */}
       <div className="flex justify-end mt-8">
         <Button 

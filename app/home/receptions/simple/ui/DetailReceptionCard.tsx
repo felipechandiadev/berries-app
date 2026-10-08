@@ -21,7 +21,7 @@ type ReceptionDetailsState = {
   price: number;
   currency: Currency;
   grossWeight: number;
-  palletAssignments: Array<{ palletId: number; traysAssigned: number }>;
+  palletAssignments: Array<{ palletId: number; traysAssigned: number; grossWeightKg?: number }>;
 };
 type DetailReceptionSummary = ReceptionDetailsState & {
   unitTrayWeight: number;
@@ -35,30 +35,47 @@ type DetailReceptionSummary = ReceptionDetailsState & {
 
 export type { DetailReceptionSummary };
 
-
 interface DetailReceptionCardProps {
   packNumber?: number;
-  isMultipack?: boolean; // Nueva prop para distinguir el contexto
+  isMultipack?: boolean;
   onRemove?: () => void;
   onChange?: (details: DetailReceptionSummary) => void;
   varietyOptions: { id: number; label: string }[];
   formatOptions: { id: number; label: string; priceCLP: number; priceUSD: number }[];
   trayOptions: { id: string; label: string; weight: number }[];
-  showRemoveButton?: boolean; // Nuevo: por defecto oculto
+  showRemoveButton?: boolean;
+  /**
+   * Si true, no renderiza el picker de pallets (el padre lo muestra en otra columna).
+   * Usar junto con `externalPalletSelection`.
+   */
+  hidePalletPanel?: boolean;
+  /** Selección de pallets controlada desde el padre (modo columnas). */
+  externalPalletSelection?: PalletPickerSelection;
 }
 
-const DetailReceptionCard: React.FC<DetailReceptionCardProps> = ({ packNumber, isMultipack = false, onRemove, onChange, varietyOptions, formatOptions, trayOptions, showRemoveButton = false }) => {
+const DetailReceptionCard: React.FC<DetailReceptionCardProps> = ({
+  packNumber,
+  isMultipack = false,
+  onRemove,
+  onChange,
+  varietyOptions,
+  formatOptions,
+  trayOptions,
+  showRemoveButton = false,
+  hidePalletPanel = false,
+  externalPalletSelection,
+}) => {
   const [receptionDetails, setReceptionDetails] = useState<ReceptionDetailsState>({
-    varietyId: null as number | null,
-    formatId: null as number | null,
-    trayId: null as string | null,
+    varietyId: null,
+    formatId: null,
+    trayId: null,
     trayLabel: null,
     traysQuantity: 0,
     impurityPercent: 0,
-    price: 0, // Add price to receptionDetails
-    currency: Currency.CLP, // Default to CLP currency
+    price: 0,
+    currency: Currency.CLP,
     grossWeight: 0,
-    palletAssignments: [] as Array<{ palletId: number; traysAssigned: number }>,
+    palletAssignments: [],
   });
   const [unitTrayWeight, setUnitTrayWeight] = useState(0);
   const [showImpurityWeight, setShowImpurityWeight] = useState(false);
@@ -66,6 +83,8 @@ const DetailReceptionCard: React.FC<DetailReceptionCardProps> = ({ packNumber, i
   const [isPalletPickerOpen, setIsPalletPickerOpen] = useState(false);
   const [createPalletDialogOpen, setCreatePalletDialogOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const hasPalletLines = palletAssignments.length > 0;
 
   const varietyName = useMemo(() => {
     if (receptionDetails.varietyId === null) return null;
@@ -82,21 +101,25 @@ const DetailReceptionCard: React.FC<DetailReceptionCardProps> = ({ packNumber, i
   const prevSummaryRef = useRef<string>('');
 
   useEffect(() => {
-    if (!onChange) {
-      return;
-    }
+    if (!onChange) return;
 
-    const traysTotalWeightCalculated = unitTrayWeight > 0 && receptionDetails.traysQuantity > 0
-      ? unitTrayWeight * receptionDetails.traysQuantity
-      : 0;
+    const traysTotalWeightCalculated =
+      unitTrayWeight > 0 && receptionDetails.traysQuantity > 0
+        ? unitTrayWeight * receptionDetails.traysQuantity
+        : 0;
 
     const grossWeightValue = receptionDetails.grossWeight > 0 ? receptionDetails.grossWeight : 0;
     const netWeightBeforeImpuritiesValue = Math.max(grossWeightValue - traysTotalWeightCalculated, 0);
-    const impurityFractionValue = receptionDetails.impurityPercent > 0 ? receptionDetails.impurityPercent / 100 : 0;
-    const netWeightValue = Math.max(netWeightBeforeImpuritiesValue - netWeightBeforeImpuritiesValue * impurityFractionValue, 0);
-    const totalToPayValue = receptionDetails.price > 0 && netWeightValue > 0
-      ? netWeightValue * receptionDetails.price
-      : 0;
+    const impurityFractionValue =
+      receptionDetails.impurityPercent > 0 ? receptionDetails.impurityPercent / 100 : 0;
+    const netWeightValue = Math.max(
+      netWeightBeforeImpuritiesValue - netWeightBeforeImpuritiesValue * impurityFractionValue,
+      0
+    );
+    const totalToPayValue =
+      receptionDetails.price > 0 && netWeightValue > 0
+        ? netWeightValue * receptionDetails.price
+        : 0;
 
     const newSummary: DetailReceptionSummary = {
       ...receptionDetails,
@@ -128,10 +151,9 @@ const DetailReceptionCard: React.FC<DetailReceptionCardProps> = ({ packNumber, i
       ...prev,
       formatId: id,
       price: price,
-      currency: currency || Currency.CLP, // Default to CLP if currency is null
+      currency: currency || Currency.CLP,
     }));
   };
-
 
   const handleTrayChange = (id: string | null, weight: number, label: string | null) => {
     setUnitTrayWeight(weight);
@@ -148,10 +170,14 @@ const DetailReceptionCard: React.FC<DetailReceptionCardProps> = ({ packNumber, i
   const handlePalletSelectionChange = useCallback((selection: PalletPickerSelection) => {
     setPalletAssignments(selection);
 
+    const traysSum = selection.reduce((sum, item) => sum + (item.traysToAssign || 0), 0);
+    const grossSum = selection.reduce((sum, item) => sum + (item.grossWeightKg || 0), 0);
+
     setReceptionDetails((prev) => {
-      const normalized = selection.map(({ pallet, traysToAssign }) => ({
+      const normalized = selection.map(({ pallet, traysToAssign, grossWeightKg }) => ({
         palletId: pallet.id,
         traysAssigned: traysToAssign,
+        ...(grossWeightKg > 0 ? { grossWeightKg } : {}),
       }));
 
       const unchanged =
@@ -161,12 +187,24 @@ const DetailReceptionCard: React.FC<DetailReceptionCardProps> = ({ packNumber, i
           return (
             nextItem !== undefined &&
             item.palletId === nextItem.palletId &&
-            item.traysAssigned === nextItem.traysAssigned
+            item.traysAssigned === nextItem.traysAssigned &&
+            (item.grossWeightKg ?? 0) === (nextItem.grossWeightKg ?? 0)
           );
-        });
+        }) &&
+        (selection.length === 0 ||
+          (prev.traysQuantity === traysSum && prev.grossWeight === grossSum));
 
       if (unchanged) {
         return prev;
+      }
+
+      if (selection.length > 0) {
+        return {
+          ...prev,
+          palletAssignments: normalized,
+          traysQuantity: traysSum,
+          grossWeight: grossSum,
+        };
       }
 
       return {
@@ -176,7 +214,28 @@ const DetailReceptionCard: React.FC<DetailReceptionCardProps> = ({ packNumber, i
     });
   }, []);
 
+  // Sync controlled pallet selection from parent (3-column layout)
+  const externalSelectionKey = useMemo(
+    () =>
+      externalPalletSelection
+        ? JSON.stringify(
+            externalPalletSelection.map((item) => ({
+              id: item.pallet.id,
+              trays: item.traysToAssign,
+              gross: item.grossWeightKg,
+            }))
+          )
+        : null,
+    [externalPalletSelection]
+  );
+
+  useEffect(() => {
+    if (!hidePalletPanel || externalPalletSelection === undefined) return;
+    handlePalletSelectionChange(externalPalletSelection);
+  }, [hidePalletPanel, externalSelectionKey, externalPalletSelection, handlePalletSelectionChange]);
+
   const handleQuantityChange = (quantity: number) => {
+    if (hasPalletLines) return;
     setReceptionDetails((prev) => ({ ...prev, traysQuantity: quantity }));
   };
 
@@ -189,26 +248,37 @@ const DetailReceptionCard: React.FC<DetailReceptionCardProps> = ({ packNumber, i
   };
 
   const handleGrossWeightChange = (weight: number) => {
+    if (hasPalletLines) return;
     setReceptionDetails((prev) => ({ ...prev, grossWeight: weight }));
   };
 
-  const traysTotalWeight = unitTrayWeight > 0 && receptionDetails.traysQuantity > 0
-    ? unitTrayWeight * receptionDetails.traysQuantity
-    : 0;
+  const traysTotalWeight =
+    unitTrayWeight > 0 && receptionDetails.traysQuantity > 0
+      ? unitTrayWeight * receptionDetails.traysQuantity
+      : 0;
 
   const grossWeight = receptionDetails.grossWeight > 0 ? receptionDetails.grossWeight : 0;
   const netWeightBeforeImpurities = Math.max(grossWeight - traysTotalWeight, 0);
-  const impurityFraction = receptionDetails.impurityPercent > 0 ? receptionDetails.impurityPercent / 100 : 0;
-  const netWeight = Math.max(netWeightBeforeImpurities - netWeightBeforeImpurities * impurityFraction, 0);
-  const totalToPay = receptionDetails.price > 0 && netWeight > 0
-    ? netWeight * receptionDetails.price
-    : 0;
+  const impurityFraction =
+    receptionDetails.impurityPercent > 0 ? receptionDetails.impurityPercent / 100 : 0;
+  const netWeight = Math.max(
+    netWeightBeforeImpurities - netWeightBeforeImpurities * impurityFraction,
+    0
+  );
+  const totalToPay =
+    receptionDetails.price > 0 && netWeight > 0 ? netWeight * receptionDetails.price : 0;
 
   const currencySymbol = receptionDetails.currency === Currency.USD ? 'US$' : '$';
 
-  const totalAssignedToPallets = useMemo(() => (
-    palletAssignments.reduce((acc, item) => acc + item.traysToAssign, 0)
-  ), [palletAssignments]);
+  const totalAssignedToPallets = useMemo(
+    () => palletAssignments.reduce((acc, item) => acc + item.traysToAssign, 0),
+    [palletAssignments]
+  );
+
+  const totalGrossOnPallets = useMemo(
+    () => palletAssignments.reduce((acc, item) => acc + (item.grossWeightKg || 0), 0),
+    [palletAssignments]
+  );
 
   const formatNumber = (value: number, decimals = 2) =>
     new Intl.NumberFormat('es-CL', {
@@ -223,15 +293,14 @@ const DetailReceptionCard: React.FC<DetailReceptionCardProps> = ({ packNumber, i
         maximumFractionDigits: 0,
       }).format(value);
     }
-
     return formatNumber(value, 2);
   };
 
   return (
-    <div className="p-5 rounded-lg bg-white w-full" data-test-id="reception-pack-card">
+    <div className="p-5 rounded-lg bg-white w-full border border-border shadow-sm" data-test-id="reception-pack-card">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold text-gray-900">
-          {isMultipack && packNumber !== undefined ? `Pack ${packNumber}` : 'Detalle de Recepción'}
+          {isMultipack && packNumber !== undefined ? `Pack ${packNumber}` : 'Detalle'}
         </h3>
         {onRemove && (
           <IconButton
@@ -257,7 +326,9 @@ const DetailReceptionCard: React.FC<DetailReceptionCardProps> = ({ packNumber, i
             formatId={receptionDetails.formatId}
             onFormatChange={handleFormatChange}
             onPriceChange={(price) => setReceptionDetails((prev) => ({ ...prev, price }))}
-            onCurrencyChange={(currency) => setReceptionDetails((prev) => ({ ...prev, currency }))}
+            onCurrencyChange={(currency) =>
+              setReceptionDetails((prev) => ({ ...prev, currency }))
+            }
             currentPrice={receptionDetails.price}
             currentCurrency={receptionDetails.currency}
             dataTestIdPrefix="pack"
@@ -271,78 +342,95 @@ const DetailReceptionCard: React.FC<DetailReceptionCardProps> = ({ packNumber, i
             trayOptions={trayOptions}
           />
 
-          <div className="mt-4">
-            <TraysQuantityStepper
-              traysQuantity={receptionDetails.traysQuantity}
-              unitTrayWeight={unitTrayWeight}
-              onQuantityChange={handleQuantityChange}
-            />
-          </div>
-
-          {/* Pallet Section - bajo la sección de bandejas */}
-          <div className="flex items-center justify-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsPalletPickerOpen((prev) => !prev)}
-              disabled={!receptionDetails.trayId || receptionDetails.traysQuantity === 0}
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm transition-transform transition-colors duration-150 ${
-                !receptionDetails.trayId || receptionDetails.traysQuantity === 0
-                  ? 'border-gray-300 text-gray-400 cursor-not-allowed'
-                  : 'border-primary text-primary hover:bg-primary/10 hover:-translate-y-0.5 hover:shadow-sm'
-              }`}
-              data-test-id="pack-pallet-toggle"
-            >
-              <span className="material-symbols-outlined text-base">category</span>
-              <span>Pallet</span>
-              {palletAssignments.length > 0 ? (
-                <span className="text-xs text-gray-500">
-                  {palletAssignments.length === 1
-                    ? `#${palletAssignments[0].pallet.id} · ${formatNumber(palletAssignments[0].traysToAssign, 0)} bandejas`
-                    : `${palletAssignments.length} pallets · ${formatNumber(totalAssignedToPallets, 0)} bandejas`}
-                </span>
-              ) : null}
-            </button>
-            <IconButton
-              icon="add"
-              variant="text"
-              onClick={() => setCreatePalletDialogOpen(true)}
-              disabled={!receptionDetails.trayId}
-              className="transition-transform duration-150 hover:-translate-y-0.5"
-              title="Crear pallet"
-            />
-          </div>
-
-          {isPalletPickerOpen ? (
-            <PalletPicker
-              expectedTrays={receptionDetails.traysQuantity}
-              onSelectionChange={handlePalletSelectionChange}
-              disabled={!receptionDetails.trayId || receptionDetails.traysQuantity === 0}
-              trayId={receptionDetails.trayId}
-              onClose={() => setIsPalletPickerOpen(false)}
-              refreshTrigger={refreshTrigger}
-            />
-          ) : null}
-
-          {palletAssignments.length > 0 && !isPalletPickerOpen ? (
-            <div className="rounded-md border bg-gray-50 p-3 text-xs text-gray-500">
-              <p className="font-semibold text-gray-700">Distribución de pallets</p>
-              <ul className="mt-2 space-y-1">
-                {palletAssignments.map(({ pallet, traysToAssign }) => (
-                  <li key={pallet.id}>Pallet #{pallet.id}: {formatNumber(traysToAssign, 0)} bandejas</li>
-                ))}
-              </ul>
-              <p className="mt-2 text-gray-600">
-                Total asignado: {formatNumber(totalAssignedToPallets, 0)} / {formatNumber(receptionDetails.traysQuantity, 0)} bandejas
+          {!hasPalletLines ? (
+            <div className="mt-4">
+              <TraysQuantityStepper
+                traysQuantity={receptionDetails.traysQuantity}
+                unitTrayWeight={unitTrayWeight}
+                onQuantityChange={handleQuantityChange}
+              />
+            </div>
+          ) : (
+            <div className="mt-4 rounded-md border border-dashed border-border bg-muted/20 p-3 text-sm">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Totales desde pallets
+              </p>
+              <p className="mt-1 font-medium text-foreground">
+                {formatNumber(totalAssignedToPallets, 0)} bandejas ·{' '}
+                {formatNumber(totalGrossOnPallets, 2)} kg brutos
               </p>
             </div>
+          )}
+
+          {!hidePalletPanel ? (
+            <>
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPalletPickerOpen((prev) => !prev)}
+                  disabled={!receptionDetails.trayId}
+                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm transition-transform transition-colors duration-150 ${
+                    !receptionDetails.trayId
+                      ? 'border-gray-300 text-gray-400 cursor-not-allowed'
+                      : 'border-primary text-primary hover:bg-primary/10 hover:-translate-y-0.5 hover:shadow-sm'
+                  }`}
+                  data-test-id="pack-pallet-toggle"
+                >
+                  <span className="material-symbols-outlined text-base">category</span>
+                  <span>Pallets</span>
+                  {palletAssignments.length > 0 ? (
+                    <span className="text-xs text-gray-500">
+                      {palletAssignments.length === 1
+                        ? `#${palletAssignments[0].pallet.id} · ${formatNumber(palletAssignments[0].traysToAssign, 0)} ban. · ${formatNumber(palletAssignments[0].grossWeightKg || 0, 2)} kg`
+                        : `${palletAssignments.length} pallets · ${formatNumber(totalAssignedToPallets, 0)} ban. · ${formatNumber(totalGrossOnPallets, 2)} kg`}
+                    </span>
+                  ) : null}
+                </button>
+                <IconButton
+                  icon="add"
+                  variant="text"
+                  onClick={() => setCreatePalletDialogOpen(true)}
+                  disabled={!receptionDetails.trayId}
+                  className="transition-transform duration-150 hover:-translate-y-0.5"
+                  title="Crear pallet"
+                />
+              </div>
+
+              {isPalletPickerOpen ? (
+                <PalletPicker
+                  onSelectionChange={handlePalletSelectionChange}
+                  disabled={!receptionDetails.trayId}
+                  trayId={receptionDetails.trayId}
+                  onClose={() => setIsPalletPickerOpen(false)}
+                  refreshTrigger={refreshTrigger}
+                  captureGrossWeight
+                />
+              ) : null}
+
+              {palletAssignments.length > 0 && !isPalletPickerOpen ? (
+                <div className="rounded-md border bg-gray-50 p-3 text-xs text-gray-500">
+                  <p className="font-semibold text-gray-700">Líneas de pallet</p>
+                  <ul className="mt-2 space-y-1">
+                    {palletAssignments.map(({ pallet, traysToAssign, grossWeightKg }) => (
+                      <li key={pallet.id}>
+                        Pallet #{pallet.id}: {formatNumber(traysToAssign, 0)} bandejas ·{' '}
+                        {formatNumber(grossWeightKg || 0, 2)} kg
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </>
           ) : null}
         </div>
 
         <div className="space-y-1">
-          <GrossWeightInput
-            grossWeight={receptionDetails.grossWeight}
-            onGrossWeightChange={handleGrossWeightChange}
-          />
+          {!hasPalletLines ? (
+            <GrossWeightInput
+              grossWeight={receptionDetails.grossWeight}
+              onGrossWeightChange={handleGrossWeightChange}
+            />
+          ) : null}
 
           <div className="pt-2">
             <ImpurityPercent
@@ -355,25 +443,32 @@ const DetailReceptionCard: React.FC<DetailReceptionCardProps> = ({ packNumber, i
 
           <div className="grid grid-cols-2 gap-1 mt-1">
             <div className="p-3 border rounded-lg bg-gray-50/50">
-              <h3 className="text-[10px] uppercase tracking-wider font-bold text-gray-500 mb-1">Peso neto</h3>
+              <h3 className="text-[10px] uppercase tracking-wider font-bold text-gray-500 mb-1">
+                Peso neto
+              </h3>
               <p className="text-lg font-bold text-gray-900">{formatNumber(netWeight)} kg</p>
             </div>
 
             <div className="p-3 border rounded-lg bg-primary/5 border-primary/10">
-              <h3 className="text-[10px] uppercase tracking-wider font-bold text-primary/70 mb-1">Total a pagar</h3>
-              <p className="text-lg font-bold text-primary">{currencySymbol} {formatTotal(totalToPay)}</p>
+              <h3 className="text-[10px] uppercase tracking-wider font-bold text-primary/70 mb-1">
+                Total a pagar
+              </h3>
+              <p className="text-lg font-bold text-primary">
+                {currencySymbol} {formatTotal(totalToPay)}
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      <CreatePalletDialog
-        open={createPalletDialogOpen}
-        onClose={() => setCreatePalletDialogOpen(false)}
-        trayId={receptionDetails.trayId!}
-        onSuccess={() => setRefreshTrigger(prev => prev + 1)}
-      />
-      {/* Botón para eliminar la card (solo si showRemoveButton) */}
+      {!hidePalletPanel ? (
+        <CreatePalletDialog
+          open={createPalletDialogOpen}
+          onClose={() => setCreatePalletDialogOpen(false)}
+          trayId={receptionDetails.trayId!}
+          onSuccess={() => setRefreshTrigger((prev) => prev + 1)}
+        />
+      ) : null}
       {showRemoveButton && (
         <div className="absolute top-2 right-2 z-10">
           <IconButton

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ReportFilters,
   getSettlementsAdvances,
@@ -22,6 +22,7 @@ export default function SettlementsAdvances({ filters }: SettlementsAdvancesProp
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const printContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -79,81 +80,83 @@ export default function SettlementsAdvances({ filters }: SettlementsAdvancesProp
             data={data}
             filename="anticipos-liquidaciones"
             title="Anticipos y liquidaciones"
-            onRefresh={() => setRefreshKey((k) => k + 1)}
+            printContentRef={printContentRef}
           />
         </div>
       </div>
 
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KPICard
-          title="Anticipos emitidos"
-          value={formatClp(data.summary.totalAdvancesClp)}
-          icon="account_balance_wallet"
-        />
-        <KPICard
-          title="Anticipos pendientes"
-          value={formatClp(data.summary.pendingAdvancesClp)}
-          icon="pending"
-        />
-        <KPICard
-          title="Recepciones por liquidar"
-          value={formatClp(data.summary.pendingReceptionsClp)}
-          icon="receipt_long"
-        />
-        <KPICard
-          title="Recepciones liquidadas"
-          value={formatClp(data.summary.settledReceptionsClp)}
-          icon="task_alt"
-        />
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-        <div className="border-b border-gray-200 px-5 py-4">
-          <h3 className="text-lg font-medium text-gray-900">Por productor</h3>
+      <div ref={printContentRef}>
+        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <KPICard
+            title="Anticipos emitidos"
+            value={formatClp(data.summary.totalAdvancesClp)}
+            icon="account_balance_wallet"
+          />
+          <KPICard
+            title="Anticipos pendientes"
+            value={formatClp(data.summary.pendingAdvancesClp)}
+            icon="pending"
+          />
+          <KPICard
+            title="Recepciones por liquidar"
+            value={formatClp(data.summary.pendingReceptionsClp)}
+            icon="receipt_long"
+          />
+          <KPICard
+            title="Recepciones liquidadas"
+            value={formatClp(data.summary.settledReceptionsClp)}
+            icon="task_alt"
+          />
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
-                  Productor
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">
-                  Anticipos pendientes
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">
-                  Recepciones pendientes
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">
-                  Saldo
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {data.byProducer.length === 0 ? (
+
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+          <div className="border-b border-gray-200 px-5 py-4">
+            <h3 className="text-lg font-medium text-gray-900">Por productor</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-500">
-                    Sin movimientos económicos en el período
-                  </td>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
+                    Productor
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">
+                    Anticipos pendientes
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">
+                    Recepciones pendientes
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">
+                    Saldo
+                  </th>
                 </tr>
-              ) : (
-                data.byProducer.map((row) => (
-                  <tr key={row.producerId} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{row.producerName}</td>
-                    <td className="px-4 py-3 text-right text-sm tabular-nums text-gray-900">
-                      {formatClp(row.advancesClp)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm tabular-nums text-gray-900">
-                      {formatClp(row.pendingReceptionsClp)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm font-medium tabular-nums text-gray-900">
-                      {formatClp(row.balance)}
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {data.byProducer.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-500">
+                      Sin movimientos económicos en el período
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  data.byProducer.map((row) => (
+                    <tr key={row.producerId} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{row.producerName}</td>
+                      <td className="px-4 py-3 text-right text-sm tabular-nums text-gray-900">
+                        {formatClp(row.advancesClp)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm tabular-nums text-gray-900">
+                        {formatClp(row.pendingReceptionsClp)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm font-medium tabular-nums text-gray-900">
+                        {formatClp(row.balance)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

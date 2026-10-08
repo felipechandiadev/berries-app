@@ -501,11 +501,31 @@ export async function getProducersSimpleList(): Promise<Array<{ id: string; name
 /**
  * Get producers simple list with label (= name + dni) for select inputs
  */
-export async function getProducersSimpleListWithLabel(): Promise<Array<{ id: string; label: string }>> {
+export async function getProducersSimpleListWithLabel(): Promise<
+  Array<{
+    id: string;
+    label: string;
+    productiveUnitId?: string;
+    productiveUnitName?: string;
+  }>
+> {
   try {
     const db = await getDb();
-    const producers = await db.getRepository(Producer).find({ where: { deletedAt: IsNull() }, order: { name: 'ASC' } });
-    return producers.map(p => ({ id: p.id, label: `${p.name} - ${p.dni}` }));
+    const producers = await db.getRepository(Producer).find({
+      where: { deletedAt: IsNull() },
+      relations: ['productiveUnit'],
+      order: { name: 'ASC' },
+    });
+    return producers.map((p) => ({
+      id: p.id,
+      label: `${p.name} - ${p.dni}`,
+      ...(p.productiveUnitId
+        ? {
+            productiveUnitId: p.productiveUnitId,
+            productiveUnitName: p.productiveUnit?.name || undefined,
+          }
+        : {}),
+    }));
   } catch (error: any) {
     console.error('[getProducersSimpleListWithLabel] Error:', error);
     return [];

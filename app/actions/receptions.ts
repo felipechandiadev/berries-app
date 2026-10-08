@@ -37,11 +37,15 @@ import {
 export interface ReceptionProducerOption {
   id: string | number;
   label: string;
+  productiveUnitId?: string;
+  productiveUnitName?: string;
 }
 
 export interface ReceptionPackAssignmentInput {
   palletId: number;
   traysAssigned: number;
+  /** Kg brutos de la línea (si se captura por pallet). */
+  grossWeightKg?: number;
 }
 
 export interface ProcessReceptionPackInput {
@@ -142,7 +146,7 @@ export interface ReceptionPrintPackSummary {
   netWeightBeforeImpurities: number;
   netWeight: number;
   totalToPay: number;
-  palletAssignments: Array<{ palletId: number; traysAssigned: number }>;
+  palletAssignments: Array<{ palletId: number; traysAssigned: number; grossWeightKg?: number }>;
 }
 
 export interface ReceptionPrintTrayDevolution {
@@ -171,6 +175,8 @@ export interface ReceptionPrintSnapshot {
   trayDevolutions: ReceptionPrintTrayDevolution[];
   totals: ReceptionPrintTotals;
   exchangeRate: number;
+  /** Fecha de registro de la recepción (editable); ISO string. */
+  createdAt?: string | null;
 }
 
 export interface ReceptionPrintDataResponse {
@@ -257,13 +263,25 @@ async function resolveActiveSeason(manager: EntityManager): Promise<Season> {
   return season;
 }
 
-async function resolveProducer(manager: EntityManager, producerOption: ReceptionProducerOption | null): Promise<{ id: string | undefined; name: string | undefined; entity: Producer | null; }> {
+async function resolveProducer(
+  manager: EntityManager,
+  producerOption: ReceptionProducerOption | null
+): Promise<{
+  id: string | undefined;
+  name: string | undefined;
+  entity: Producer | null;
+  productiveUnitId?: string;
+  productiveUnitName?: string;
+}> {
   if (!producerOption?.id) {
     return { id: undefined, name: undefined, entity: null };
   }
 
   const producerId = String(producerOption.id);
-  const producer = await manager.getRepository(Producer).findOne({ where: { id: producerId } });
+  const producer = await manager.getRepository(Producer).findOne({
+    where: { id: producerId },
+    relations: ['productiveUnit'],
+  });
 
   if (!producer) {
     throw new Error('El productor seleccionado no existe');
@@ -273,6 +291,8 @@ async function resolveProducer(manager: EntityManager, producerOption: Reception
     id: producer.id,
     name: producer.name,
     entity: producer,
+    productiveUnitId: producer.productiveUnitId || undefined,
+    productiveUnitName: producer.productiveUnit?.name || producerOption.productiveUnitName || undefined,
   };
 }
 
@@ -385,10 +405,15 @@ export async function processReception(input: ProcessReceptionInput): Promise<Pr
           pricePerKg,
           currency: pack.currency ?? Currency.CLP,
           totalToPay,
-          palletAssignments: (pack.palletAssignments ?? []).map((assignment) => ({
-            palletId: assignment.palletId,
-            traysAssigned: normalizeNumber(assignment.traysAssigned),
-          })),
+          palletAssignments: (pack.palletAssignments ?? []).map((assignment) => {
+            const traysAssigned = normalizeNumber(assignment.traysAssigned);
+            const grossWeightKg = normalizeNumber(assignment.grossWeightKg, 0);
+            return {
+              palletId: assignment.palletId,
+              traysAssigned,
+              ...(grossWeightKg > 0 ? { grossWeightKg } : {}),
+            };
+          }),
         });
 
         const savedPack = await manager.save(ReceptionPack, receptionPack);
@@ -434,14 +459,36 @@ export async function processReception(input: ProcessReceptionInput): Promise<Pr
             item.receptionPackId === String(entity.id) && item.trayId === trayIdForMetadata
           );
 
+          const lineGross = normalizeNumber(assignment.grossWeightKg, 0);
+          const lineTrayTare = normalizeNumber(pack.unitTrayWeight) * traysAssigned;
+          const lineNetBefore = Math.max(lineGross - lineTrayTare, 0);
+          const impurityFraction =
+            normalizeNumber(pack.impurityPercent) > 0
+              ? normalizeNumber(pack.impurityPercent) / 100
+              : 0;
+          const lineNet =
+            lineGross > 0
+              ? Math.max(lineNetBefore - lineNetBefore * impurityFraction, 0)
+              : undefined;
+
           if (existingAssignment) {
             existingAssignment.quantity += traysAssigned;
+            if (lineGross > 0) {
+              existingAssignment.grossWeightKg =
+                normalizeNumber(existingAssignment.grossWeightKg, 0) + lineGross;
+            }
+            if (lineNet !== undefined) {
+              existingAssignment.netWeightKg =
+                normalizeNumber(existingAssignment.netWeightKg, 0) + lineNet;
+            }
           } else {
             metadata.push({
               receptionPackId: String(entity.id),
               trayId: trayIdForMetadata,
               quantity: traysAssigned,
               receptionId: receptionTransactionId,
+              ...(lineGross > 0 ? { grossWeightKg: lineGross } : {}),
+              ...(lineNet !== undefined ? { netWeightKg: Number(lineNet.toFixed(3)) } : {}),
             });
           }
 
@@ -704,10 +751,15 @@ export async function processReception(input: ProcessReceptionInput): Promise<Pr
         currency: pack.currency ?? Currency.CLP,
         pricePerKg: normalizeNumber(pack.price),
         totalToPay: normalizeNumber(pack.totalToPay),
-        palletAssignments: (pack.palletAssignments ?? []).map((assignment) => ({
-          palletId: assignment.palletId,
-          traysAssigned: normalizeNumber(assignment.traysAssigned),
-        })),
+        palletAssignments: (pack.palletAssignments ?? []).map((assignment) => {
+          const traysAssigned = normalizeNumber(assignment.traysAssigned);
+          const grossWeightKg = normalizeNumber(assignment.grossWeightKg, 0);
+          return {
+            palletId: assignment.palletId,
+            traysAssigned,
+            ...(grossWeightKg > 0 ? { grossWeightKg } : {}),
+          };
+        }),
       }));
 
       const metadataTrayReturns = trayDevolutionTransactions.map((item) => ({
@@ -737,6 +789,9 @@ export async function processReception(input: ProcessReceptionInput): Promise<Pr
       const receptionMetadata = {
         producerId: producerData.id,
         producerName: producerData.name ?? input.producer?.label ?? null,
+        productiveUnitId: producerData.productiveUnitId ?? input.producer?.productiveUnitId ?? null,
+        productiveUnitName:
+          producerData.productiveUnitName ?? input.producer?.productiveUnitName ?? null,
         guideNumber: input.guide || null,
         driver: input.driver || null,
         varietyIds: Array.from(uniqueVarietyIds),
@@ -1778,7 +1833,9 @@ const parseUnknownMetadata = (value: unknown): Record<string, any> | null => {
   return typeof value === 'object' ? (value as Record<string, any>) : null;
 };
 
-const normalizeAssignments = (value: unknown): Array<{ palletId: number; traysAssigned: number; }> => {
+const normalizeAssignments = (
+  value: unknown
+): Array<{ palletId: number; traysAssigned: number; grossWeightKg?: number }> => {
   if (!value) {
     return [];
   }
@@ -1807,12 +1864,25 @@ const normalizeAssignments = (value: unknown): Array<{ palletId: number; traysAs
       if (!Number.isFinite(palletId)) {
         return null;
       }
+      const grossRaw = assignment.grossWeightKg;
+      const grossWeightKg =
+        grossRaw === null || grossRaw === undefined
+          ? undefined
+          : normalizeNumber(grossRaw, 0);
       return {
         palletId,
         traysAssigned: normalizeNumber(assignment.traysAssigned, 0),
+        ...(grossWeightKg !== undefined && grossWeightKg > 0
+          ? { grossWeightKg }
+          : {}),
       };
     })
-    .filter((assignment): assignment is { palletId: number; traysAssigned: number } => Boolean(assignment));
+    .filter(
+      (
+        assignment
+      ): assignment is { palletId: number; traysAssigned: number; grossWeightKg?: number } =>
+        Boolean(assignment)
+    );
 };
 
 export async function getReceptionDetail(receptionId: string): Promise<ReceptionDetailResponse> {
@@ -1830,7 +1900,7 @@ export async function getReceptionDetail(receptionId: string): Promise<Reception
         deletedAt: IsNull(),
       },
       relations: {
-        producer: { person: true },
+        producer: { person: true, productiveUnit: true },
         user: { person: true },
         season: true,
       },
@@ -2070,6 +2140,11 @@ export async function getReceptionDetail(receptionId: string): Promise<Reception
       ),
     };
 
+    const metadataUnitName =
+      typeof metadata?.productiveUnitName === 'string' ? metadata.productiveUnitName : null;
+    const metadataUnitId =
+      typeof metadata?.productiveUnitId === 'string' ? metadata.productiveUnitId : null;
+
     const producerInfo: ReceptionDetailProducerInfo | null = reception.producer
       ? {
           id: reception.producer.id,
@@ -2079,8 +2154,18 @@ export async function getReceptionDetail(receptionId: string): Promise<Reception
           mail: reception.producer.mail ?? null,
           personName: reception.producer.person?.name ?? null,
           personDni: reception.producer.person?.dni ?? null,
+          productiveUnitId:
+            reception.producer.productiveUnitId ?? metadataUnitId ?? null,
+          productiveUnitName:
+            reception.producer.productiveUnit?.name ?? metadataUnitName ?? null,
         }
-      : null;
+      : metadataUnitName
+        ? {
+            productiveUnitId: metadataUnitId,
+            productiveUnitName: metadataUnitName,
+            name: metadata?.producerName ?? null,
+          }
+        : null;
 
     const varietyNames = new Set<string>();
     const formatNames = new Set<string>();
@@ -2187,10 +2272,18 @@ const buildReceptionPrintSnapshot = (detail: ReceptionDetailData): ReceptionPrin
       : index + 1;
     const currency = toCurrencyEnum(pack.currency);
     const assignments = Array.isArray(pack.palletAssignments)
-      ? pack.palletAssignments.map((assignment) => ({
-          palletId: normalizeNumber(assignment.palletId, 0),
-          traysAssigned: normalizeNumber(assignment.traysAssigned, 0),
-        }))
+      ? pack.palletAssignments.map((assignment) => {
+          const traysAssigned = normalizeNumber(assignment.traysAssigned, 0);
+          const grossWeightKg = normalizeNumber(
+            (assignment as { grossWeightKg?: number }).grossWeightKg,
+            0
+          );
+          return {
+            palletId: normalizeNumber(assignment.palletId, 0),
+            traysAssigned,
+            ...(grossWeightKg > 0 ? { grossWeightKg } : {}),
+          };
+        })
       : [];
 
     return {
@@ -2293,10 +2386,23 @@ const buildReceptionPrintSnapshot = (detail: ReceptionDetailData): ReceptionPrin
   const producerLabel = labelParts.join(' - ');
   const producerId = detail.producer?.id ?? detail.summary.id ?? null;
 
+  const productiveUnitName =
+    detail.producer?.productiveUnitName ??
+    (typeof (metadata as any)?.productiveUnitName === 'string'
+      ? (metadata as any).productiveUnitName
+      : null);
+  const productiveUnitId =
+    detail.producer?.productiveUnitId ??
+    (typeof (metadata as any)?.productiveUnitId === 'string'
+      ? (metadata as any).productiveUnitId
+      : null);
+
   const producerOption = producerLabel
     ? {
         id: producerId !== null && producerId !== undefined ? producerId : producerLabel,
         label: producerLabel,
+        ...(productiveUnitId ? { productiveUnitId: String(productiveUnitId) } : {}),
+        ...(productiveUnitName ? { productiveUnitName: String(productiveUnitName) } : {}),
       }
     : null;
 
@@ -2311,6 +2417,12 @@ const buildReceptionPrintSnapshot = (detail: ReceptionDetailData): ReceptionPrin
               ? producerOption.id
               : String(producerOption.id),
           label: producerOption.label,
+          ...(producerOption.productiveUnitId
+            ? { productiveUnitId: producerOption.productiveUnitId }
+            : {}),
+          ...(producerOption.productiveUnitName
+            ? { productiveUnitName: producerOption.productiveUnitName }
+            : {}),
         }
       : null,
     guide: guide ? String(guide) : '',
@@ -2319,6 +2431,7 @@ const buildReceptionPrintSnapshot = (detail: ReceptionDetailData): ReceptionPrin
     trayDevolutions,
     totals,
     exchangeRate,
+    createdAt: detail.summary.createdAt ?? null,
   };
 };
 
@@ -2437,6 +2550,9 @@ export async function deleteReception(receptionId: string, auditUserId?: string)
 
       await manager.getRepository(ReceptionPack).delete({ receptionTransactionId: receptionId });
 
+      // Soft-delete de la recepción principal (el listado filtra deletedAt IS NULL)
+      await manager.getRepository(Transaction).softDelete({ id: receptionIdBigInt });
+
       // Auditoría de eliminación de recepción
       const userId = resolvedAuditUserId;
       await manager.insert(Audit, {
@@ -2460,6 +2576,8 @@ export async function deleteReception(receptionId: string, auditUserId?: string)
         createdAt: new Date(),
       });
     });
+
+    revalidatePath('/home/receptions/receptions');
 
     return { success: true };
   } catch (error: any) {
@@ -3172,7 +3290,7 @@ export async function updatePackPrice(input: UpdatePackPriceInput): Promise<Upda
 export interface AssignPackToPalletsInput {
   receptionId: string;
   packId: string;
-  palletAssignments: Array<{ palletId: number; traysAssigned: number }>;
+  palletAssignments: Array<{ palletId: number; traysAssigned: number; grossWeightKg?: number }>;
   reason: string;
   userId: string;
 }
@@ -3202,12 +3320,24 @@ export async function assignPackToPallets(input: AssignPackToPalletsInput): Prom
         return { success: false, error: 'Todas las asignaciones deben tener un pallet válido y cantidad de bandejas mayor a 0' };
       }
 
+      if (!(normalizeNumber(assignment.grossWeightKg, 0) > 0)) {
+        return {
+          success: false,
+          error: 'Todas las asignaciones deben incluir kg brutos mayores a 0',
+        };
+      }
+
       if (seenPallets.has(assignment.palletId)) {
         return { success: false, error: `El pallet ${assignment.palletId} está repetido en la asignación` };
       }
 
       seenPallets.add(assignment.palletId);
     }
+
+    const totalAssignedGross = palletAssignments.reduce(
+      (sum, assignment) => sum + normalizeNumber(assignment.grossWeightKg, 0),
+      0
+    );
 
     const dataSource = await getDb();
     const manager = dataSource.manager;
@@ -3261,6 +3391,13 @@ export async function assignPackToPallets(input: AssignPackToPalletsInput): Prom
         throw new Error(`No se pueden asignar ${totalAssignedTrays} bandejas cuando el pack solo tiene ${pack.traysQuantity}`);
       }
 
+      const packGross = normalizeNumber(pack.grossWeight, 0);
+      if (totalAssignedGross > 0 && packGross > 0 && totalAssignedGross > packGross + 0.01) {
+        throw new Error(
+          `No se pueden asignar ${totalAssignedGross} kg brutos cuando el pack solo tiene ${packGross} kg`
+        );
+      }
+
       // Validate and get pallets
       const pallets = await Promise.all(
         palletAssignments.map(async (assignment) => {
@@ -3277,14 +3414,19 @@ export async function assignPackToPallets(input: AssignPackToPalletsInput): Prom
             throw new Error(`El pallet ${assignment.palletId} ya tiene bandejas asociadas a este pack`);
           }
 
-          return { pallet, traysAssigned: assignment.traysAssigned, metadata };
+          return {
+            pallet,
+            traysAssigned: assignment.traysAssigned,
+            grossWeightKg: normalizeNumber(assignment.grossWeightKg, 0),
+            metadata,
+          };
         })
       );
 
       // Create assignment transactions and update pallet metadata
       const assignmentTransactions: Transaction[] = [];
 
-      for (const { pallet, traysAssigned, metadata } of pallets) {
+      for (const { pallet, traysAssigned, grossWeightKg, metadata } of pallets) {
         // Check pallet capacity
         const sanitizedMetadata = metadata.filter((item) => String(item.receptionPackId) !== String(pack.id));
         const currentTraysInPallet = sanitizedMetadata.reduce((sum, item) => sum + (item.quantity || 0), 0);
@@ -3295,6 +3437,18 @@ export async function assignPackToPallets(input: AssignPackToPalletsInput): Prom
         if (nextTraysQuantity > pallet.capacity) {
           throw new Error(`El pallet ${pallet.id} no tiene capacidad suficiente (actual: ${currentTraysInPallet}, capacidad: ${pallet.capacity})`);
         }
+
+        const unitTrayWeight = normalizeNumber(pack.unitTrayWeight, 0);
+        const impurityFraction =
+          normalizeNumber(pack.impurityPercent, 0) > 0
+            ? normalizeNumber(pack.impurityPercent, 0) / 100
+            : 0;
+        const lineTrayTare = unitTrayWeight * traysAssigned;
+        const lineNetBefore = Math.max(grossWeightKg - lineTrayTare, 0);
+        const lineNet =
+          grossWeightKg > 0
+            ? Number(Math.max(lineNetBefore - lineNetBefore * impurityFraction, 0).toFixed(3))
+            : undefined;
 
         // Create assignment transaction
         const assignmentTransaction = new Transaction();
@@ -3312,6 +3466,7 @@ export async function assignPackToPallets(input: AssignPackToPalletsInput): Prom
           trayId: pack.trayId,
           trayLabel: pack.trayLabel,
           traysAssigned,
+          ...(grossWeightKg > 0 ? { grossWeightKg } : {}),
           palletTraysBefore,
           palletTraysAfter: nextTraysQuantity,
           performedBy: userId,
@@ -3341,6 +3496,8 @@ export async function assignPackToPallets(input: AssignPackToPalletsInput): Prom
           quantity: traysAssigned,
           receptionId: String(reception.id),
           receptionNote: `Pack ${pack.id} - ${pack.varietyName} - ${pack.formatName}`,
+          ...(grossWeightKg > 0 ? { grossWeightKg } : {}),
+          ...(lineNet !== undefined ? { netWeightKg: lineNet } : {}),
         };
 
         const updatedMetadata = [...sanitizedMetadata, assignmentMetadata];
@@ -3365,12 +3522,20 @@ export async function assignPackToPallets(input: AssignPackToPalletsInput): Prom
       }
 
       // Persist assignments in pack record to keep detail views in sync
-      const normalizedAssignments = palletAssignments.map((assignment) => ({
-        palletId: assignment.palletId,
-        traysAssigned: assignment.traysAssigned,
-      }));
+      const normalizedAssignments = palletAssignments.map((assignment) => {
+        const traysAssigned = assignment.traysAssigned;
+        const grossWeightKg = normalizeNumber(assignment.grossWeightKg, 0);
+        return {
+          palletId: assignment.palletId,
+          traysAssigned,
+          ...(grossWeightKg > 0 ? { grossWeightKg } : {}),
+        };
+      });
 
-      const mergedAssignmentsMap = new Map<number, { palletId: number; traysAssigned: number }>();
+      const mergedAssignmentsMap = new Map<
+        number,
+        { palletId: number; traysAssigned: number; grossWeightKg?: number }
+      >();
       previousAssignments.forEach((assignment) => {
         mergedAssignmentsMap.set(assignment.palletId, assignment);
       });

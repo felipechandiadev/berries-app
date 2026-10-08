@@ -288,12 +288,26 @@ const ProcessedReceptionDialog: React.FC<ProcessedReceptionDialogProps> = ({
           palletAssignments: (pack.palletAssignments ?? []).map((assignment) => ({
             palletId: assignment.palletId,
             traysAssigned: assignment.traysAssigned,
+            ...(assignment.grossWeightKg && assignment.grossWeightKg > 0
+              ? { grossWeightKg: assignment.grossWeightKg }
+              : {}),
           })),
         };
       });
 
       const payload: ProcessReceptionInput = {
-        producer: snapshot.producer ? { id: snapshot.producer.id, label: snapshot.producer.label } : null,
+        producer: snapshot.producer
+          ? {
+              id: snapshot.producer.id,
+              label: snapshot.producer.label,
+              ...(snapshot.producer.productiveUnitId
+                ? { productiveUnitId: snapshot.producer.productiveUnitId }
+                : {}),
+              ...(snapshot.producer.productiveUnitName
+                ? { productiveUnitName: snapshot.producer.productiveUnitName }
+                : {}),
+            }
+          : null,
         guide: snapshot.guide ?? '',
         driver: snapshot.driver ?? '',
         packs: packInputs,

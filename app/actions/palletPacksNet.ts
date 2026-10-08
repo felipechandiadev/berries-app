@@ -3,11 +3,15 @@ import { Pallet, PalletMetadata, PalletTrayAssignment } from '@/data/entities/Pa
 import { ReceptionPack } from '@/data/entities/ReceptionPack';
 
 /**
- * Suma de netos de packs prorrateados por bandejas presentes en el metadata del pallet.
+ * Suma de netos de packs en un pallet.
+ * Preferencia: netWeightKg de la línea → grossWeightKg * (packNet/packGross) → prorrateo por bandejas.
  */
 export function computePacksNetWeightFromPacks(
   metadata: PalletTrayAssignment[],
-  packById: Map<string, { netWeight: number; traysQuantity: number }>
+  packById: Map<
+    string,
+    { netWeight: number; traysQuantity: number; grossWeight: number }
+  >
 ): number {
   if (!metadata.length) return 0;
 
@@ -15,9 +19,32 @@ export function computePacksNetWeightFromPacks(
   for (const assignment of metadata) {
     const pack = packById.get(String(assignment.receptionPackId));
     if (!pack) continue;
+
+    const assigned = Number(assignment.quantity) || 0;
+    const lineNet = Number(assignment.netWeightKg);
+    if (Number.isFinite(lineNet) && lineNet > 0) {
+      total += lineNet;
+      continue;
+    }
+
+    const lineGross = Number(assignment.grossWeightKg);
+    if (Number.isFinite(lineGross) && lineGross > 0) {
+      const packGross = Number(pack.grossWeight) || 0;
+      const packNet = Number(pack.netWeight) || 0;
+      if (packGross > 0) {
+        total += (lineGross * packNet) / packGross;
+      } else {
+        // Sin bruto de pack: aproximar restando solo con prorrateo de neto por bandejas
+        const packTrays = Number(pack.traysQuantity) || 0;
+        if (packTrays > 0) {
+          total += (packNet * assigned) / packTrays;
+        }
+      }
+      continue;
+    }
+
     const packNet = Number(pack.netWeight) || 0;
     const packTrays = Number(pack.traysQuantity) || 0;
-    const assigned = Number(assignment.quantity) || 0;
     if (packTrays > 0) {
       total += (packNet * assigned) / packTrays;
     }
@@ -50,7 +77,11 @@ export async function computePacksNetWeight(
   const packById = new Map(
     packs.map((p) => [
       String(p.id),
-      { netWeight: Number(p.netWeight) || 0, traysQuantity: Number(p.traysQuantity) || 0 },
+      {
+        netWeight: Number(p.netWeight) || 0,
+        traysQuantity: Number(p.traysQuantity) || 0,
+        grossWeight: Number(p.grossWeight) || 0,
+      },
     ])
   );
 

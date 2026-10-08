@@ -23,6 +23,7 @@ yarn-error.log*
 
 # session / local junk
 cookies.txt
+.tmp/
 
 # OS / IDE
 .DS_Store

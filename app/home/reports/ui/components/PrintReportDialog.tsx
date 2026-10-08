@@ -14,19 +14,62 @@ interface PrintReportDialogProps {
   printStyles?: string;
 }
 
+const DEFAULT_REPORT_PRINT_STYLES = `
+@page {
+  size: A4;
+  margin: 10mm;
+}
+body {
+  background: #fff !important;
+  color: #111 !important;
+}
+.report-print-snapshot {
+  width: 100%;
+}
+.report-print-snapshot .grid {
+  break-inside: avoid;
+}
+.report-print-snapshot table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.report-print-snapshot th,
+.report-print-snapshot td {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 6px 8px;
+  text-align: left;
+}
+@media print {
+  body {
+    margin: 0;
+    padding: 0;
+  }
+  .report-print-snapshot * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .report-print-snapshot .lg\\:grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .report-print-snapshot .xl\\:grid-cols-4,
+  .report-print-snapshot .sm\\:grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+`;
+
 export default function PrintReportDialog({
   open,
   onClose,
   title,
   children,
-  size = 'lg',
+  size = 'xl',
   printLabel = 'Imprimir',
   closeLabel = 'Cerrar',
-  contentClassName = '',
+  contentClassName = 'bg-white',
   printStyles,
 }: PrintReportDialogProps) {
-  const now = new Date();
-  const formattedDate = now.toLocaleString();
+  const formattedDate = new Date().toLocaleString('es-CL');
 
   return (
     <DialogToPrint
@@ -37,20 +80,17 @@ export default function PrintReportDialog({
       printLabel={printLabel}
       closeLabel={closeLabel}
       contentClassName={contentClassName}
-      printStyles={printStyles}
+      preferBrowserPrint
+      printStyles={`${DEFAULT_REPORT_PRINT_STYLES}\n${printStyles ?? ''}`}
     >
-      <div className="print-report-root">
-        <header style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ margin: 0 }}>{title}</h2>
-            <div style={{ fontSize: 12, color: '#666' }}>{formattedDate}</div>
+      <div className="print-report-root bg-white">
+        <header className="mb-4 border-b border-gray-200 pb-3">
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="m-0 text-xl font-semibold text-gray-900">{title}</h2>
+            <div className="text-xs text-gray-500">{formattedDate}</div>
           </div>
-          <hr style={{ marginTop: 8 }} />
         </header>
-
-        <section>
-          {children}
-        </section>
+        <section>{children}</section>
       </div>
     </DialogToPrint>
   );

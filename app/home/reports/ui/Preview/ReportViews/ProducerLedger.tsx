@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ReportFilters,
   getProducerLedger,
@@ -26,6 +26,7 @@ export default function ProducerLedger({ filters }: ProducerLedgerProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const printContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -83,82 +84,84 @@ export default function ProducerLedger({ filters }: ProducerLedgerProps) {
             data={data}
             filename="productores-ledger"
             title="Productores — Ledger"
-            onRefresh={() => setRefreshKey((k) => k + 1)}
+            printContentRef={printContentRef}
           />
         </div>
       </div>
 
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KPICard title="Productores activos" value={String(data.summary.totalProducers)} icon="agriculture" />
-        <KPICard title="Kg totales" value={formatKg(data.summary.totalKg)} icon="scale" />
-        <KPICard title="CLP recepciones" value={formatClp(data.summary.totalClp)} icon="payments" />
-        <KPICard title="Top productor" value={data.summary.topProducer} icon="military_tech" />
-      </div>
+      <div ref={printContentRef}>
+        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <KPICard title="Productores activos" value={String(data.summary.totalProducers)} icon="agriculture" />
+          <KPICard title="Kg totales" value={formatKg(data.summary.totalKg)} icon="scale" />
+          <KPICard title="CLP recepciones" value={formatClp(data.summary.totalClp)} icon="payments" />
+          <KPICard title="Top productor" value={data.summary.topProducer} icon="military_tech" />
+        </div>
 
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Productor
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Unidad
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Recepciones
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Kg
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
-                  CLP recepción
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Anticipos
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Saldo
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {data.producers.length === 0 ? (
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">
-                    Sin productores con recepciones en el período
-                  </td>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Productor
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Unidad
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Recepciones
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Kg
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                    CLP recepción
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Anticipos
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Saldo
+                  </th>
                 </tr>
-              ) : (
-                data.producers.map((p) => (
-                  <tr key={p.id} className="hover:bg-gray-50">
-                    <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
-                      {p.name}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
-                      {p.productiveUnitName || '—'}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-sm tabular-nums text-gray-900">
-                      {p.receptionCount}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-sm tabular-nums text-gray-900">
-                      {formatKg(p.totalKg)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-sm tabular-nums text-gray-900">
-                      {formatClp(p.receptionClp)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-sm tabular-nums text-gray-900">
-                      {formatClp(p.advancesClp)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-medium tabular-nums text-gray-900">
-                      {formatClp(p.balance)}
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {data.producers.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">
+                      Sin productores con recepciones en el período
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  data.producers.map((p) => (
+                    <tr key={p.id} className="hover:bg-gray-50">
+                      <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
+                        {p.name}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
+                        {p.productiveUnitName || '—'}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right text-sm tabular-nums text-gray-900">
+                        {p.receptionCount}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right text-sm tabular-nums text-gray-900">
+                        {formatKg(p.totalKg)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right text-sm tabular-nums text-gray-900">
+                        {formatClp(p.receptionClp)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right text-sm tabular-nums text-gray-900">
+                        {formatClp(p.advancesClp)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-medium tabular-nums text-gray-900">
+                        {formatClp(p.balance)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

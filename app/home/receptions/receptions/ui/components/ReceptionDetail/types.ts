@@ -47,6 +47,8 @@ export interface ReceptionDetailProducerInfo {
   mail?: string | null;
   personName?: string | null;
   personDni?: string | null;
+  productiveUnitId?: string | null;
+  productiveUnitName?: string | null;
 }
 
 export interface ReceptionDetailDocumentInfo {
@@ -71,6 +73,7 @@ export interface ReceptionDetailTotals {
 export interface ReceptionDetailPalletAssignment {
   palletId: number;
   traysAssigned: number;
+  grossWeightKg?: number;
 }
 
 export interface ReceptionDetailPack {

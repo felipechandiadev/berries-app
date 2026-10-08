@@ -1,8 +1,9 @@
 'use client'
-import React, { useState, useContext, useTransition } from 'react';
+import React, { useState, useContext } from 'react';
 import Image from 'next/image';
 import SideBar, { SideBarMenuItem } from './SideBar';
 import UserProfileDropdown from '@/app/home/users/ui/UserProfileDropdown';
+import PrinterSetupButton from './PrinterSetupButton';
 
 interface TopBarProps {
   title?: string;
@@ -89,6 +90,8 @@ const TopBar: React.FC<TopBarProps> = ({
 
           {/* Right side elements */}
           <div className="flex items-center gap-2">
+            <PrinterSetupButton />
+
             {/* User name */}
             {userName && (
               <span className="text-sm font-weight-300 text-foreground" data-test-id="top-bar-user-name">

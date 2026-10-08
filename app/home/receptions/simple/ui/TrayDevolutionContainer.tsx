@@ -65,14 +65,16 @@ const TrayDevolutionContainer: React.FC<TrayDevolutionContainerProps> = ({ onCha
   ), [items, trayOptions, updateItem, removeItem]);
 
   const placeholders = useMemo(() => {
-    const needed = Math.max(3 - items.length, 0);
-    return Array.from({ length: needed }, (_, index) => (
+    if (items.length > 0) return [];
+    return [
       <div
-        key={`placeholder-${index}`}
-        className="flex min-h-[170px] items-center justify-center rounded-md border border-dashed border-border bg-white/40"
+        key="placeholder-0"
+        className="flex min-h-[120px] items-center justify-center rounded-md border border-dashed border-border bg-white/40 text-xs text-muted-foreground"
         data-test-id="tray-devolution-placeholder"
-      />
-    ));
+      >
+        Sin devoluciones
+      </div>,
+    ];
   }, [items.length]);
 
   const containerClassName = `${className ? `${className} ` : ''}flex h-full w-full flex-col rounded-lg border border-border bg-gray-50 p-4 shadow-sm`;
@@ -92,7 +94,7 @@ const TrayDevolutionContainer: React.FC<TrayDevolutionContainerProps> = ({ onCha
         />
       </div>
 
-      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="mt-4 grid grid-cols-1 gap-3">
         {cards}
         {placeholders}
       </div>

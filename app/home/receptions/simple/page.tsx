@@ -8,13 +8,15 @@ import { Button } from '@/app/baseComponents/Button/Button';
 import ProcessedReceptionDialog from './ui/ProcessedReceptionDialog';
 import PrintReceptionDialog from './ui/PrintReceptionDialog';
 import { useAlert } from '@/app/state/contexts/AlertContext';
-import { Option } from '@/app/baseComponents/AutoComplete/AutoComplete';
-import { ReceptionDataSnapshot } from './ui/TransactionData';
+import {
+  ReceptionDataSnapshot,
+  type ReceptionProducerOption,
+} from './ui/TransactionData';
 
 export default function Page() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [producers, setProducers] = useState<Option[]>([]);
+  const [producers, setProducers] = useState<ReceptionProducerOption[]>([]);
   const [initialProducerId, setInitialProducerId] = useState<string | undefined>(undefined);
   const [initialGuide, setInitialGuide] = useState<string | undefined>(undefined);
   const [initialDriver, setInitialDriver] = useState<string | undefined>(undefined);
@@ -30,7 +32,12 @@ export default function Page() {
   useEffect(() => {
     const fetchProducers = async () => {
       const producersList = await getProducersSimpleListWithLabel();
-      const producersMapped: Option[] = producersList.map(p => ({ id: p.id, label: p.label }));
+      const producersMapped: ReceptionProducerOption[] = producersList.map((p) => ({
+        id: p.id,
+        label: p.label,
+        ...(p.productiveUnitId ? { productiveUnitId: p.productiveUnitId } : {}),
+        ...(p.productiveUnitName ? { productiveUnitName: p.productiveUnitName } : {}),
+      }));
       setProducers(producersMapped);
     };
     fetchProducers();

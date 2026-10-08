@@ -26,6 +26,7 @@
     "@types/react": "^19.2.6",
     "@types/react-dom": "^19.2.3",
     "@types/uuid": "^10.0.0",
+    "@types/w3c-web-usb": "^1.0.14",
     "autoprefixer": "^10.4.22",
     "eslint": "9.39.1",
     "eslint-config-next": "16.0.7",

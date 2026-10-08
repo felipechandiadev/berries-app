@@ -11,6 +11,10 @@ export interface PalletTrayAssignment {
     quantity: number;
     receptionId?: string;
     receptionNote?: string;
+    /** Kg brutos asignados a este pallet desde el pack (opcional; datos nuevos). */
+    grossWeightKg?: number;
+    /** Kg netos de la línea tras tara e impureza del pack (opcional). */
+    netWeightKg?: number;
 }
 
 export type PalletMetadata = PalletTrayAssignment[] | null;
