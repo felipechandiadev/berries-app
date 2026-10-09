@@ -26,6 +26,18 @@ export type {
   TicketTrayDevolution,
 } from './receptionTicket';
 
+export {
+  buildTrayDeliveryTicketEscPos,
+  buildTrayDeliverySnapshotFromParts,
+  formatTrayTicketDateParts,
+  trayDeliveryMovementLabel,
+  destinationLines,
+} from './trayDeliveryTicket';
+export type {
+  TrayDeliveryTicketSnapshot,
+  TrayDeliveryCounterpartyType,
+} from './trayDeliveryTicket';
+
 export { getPrintLogoRaster } from './logo';
 export type { EscPosRaster } from './logo';
 

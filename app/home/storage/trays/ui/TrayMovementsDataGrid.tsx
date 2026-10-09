@@ -167,8 +167,8 @@ export default function TrayMovementsDataGrid({
     {
       field: 'actions',
       headerName: '',
-      flex: 0.8,
-      minWidth: 90,
+      flex: 1.0,
+      minWidth: 120,
       sortable: false,
       filterable: false,
       renderCell: (params: RenderCellParams) => (

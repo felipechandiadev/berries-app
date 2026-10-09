@@ -8,6 +8,11 @@ import { getActiveSeason } from '@/app/actions/seasons';
 import { getProducersSimpleListWithLabel } from '@/app/actions/producers';
 import { getCustomersSimpleListWithLabel } from '@/app/actions/customers';
 import { createTrayDelivery, type TrayMovementCounterparty } from '@/app/actions/transactions';
+import {
+  buildTrayDeliverySnapshotFromParts,
+  type TrayDeliveryTicketSnapshot,
+} from '@/lib/printing';
+import PrintTrayDeliveryDialog from './PrintTrayDeliveryDialog';
 
 interface Tray {
   id: string;
@@ -71,6 +76,8 @@ const TrayDeliveryDialog: React.FC<TrayDeliveryDialogProps> = ({
   const [hasLoadedOptions, setHasLoadedOptions] = useState(false);
   const [producers, setProducers] = useState<SelectOption[]>([]);
   const [clients, setClients] = useState<SelectOption[]>([]);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printSnapshot, setPrintSnapshot] = useState<TrayDeliveryTicketSnapshot | null>(null);
 
   useEffect(() => {
     if (!open || hasLoadedOptions) {
@@ -134,12 +141,24 @@ const TrayDeliveryDialog: React.FC<TrayDeliveryDialogProps> = ({
     setFormErrors([]);
   };
 
+  const finishDeliveryFlow = () => {
+    resetForm();
+    onSuccess?.();
+    onClose();
+  };
+
   const handleClose = () => {
-    if (isSubmitting) {
+    if (isSubmitting || printOpen) {
       return;
     }
     resetForm();
     onClose();
+  };
+
+  const handlePrintClose = () => {
+    setPrintOpen(false);
+    setPrintSnapshot(null);
+    finishDeliveryFlow();
   };
 
   const estimatedStock = useMemo(() => {
@@ -248,9 +267,11 @@ const TrayDeliveryDialog: React.FC<TrayDeliveryDialogProps> = ({
         return;
       }
 
-      const seasonId = (Array.isArray(seasonResult.data)
-        ? seasonResult.data[0]?.id
-        : (seasonResult.data as any)?.id) as string | undefined;
+      const seasonData = Array.isArray(seasonResult.data)
+        ? seasonResult.data[0]
+        : (seasonResult.data as any);
+      const seasonId = seasonData?.id as string | undefined;
+      const seasonName = (seasonData?.name as string | undefined) || undefined;
 
       if (!seasonId) {
         const message = 'La temporada activa es inválida';
@@ -270,10 +291,34 @@ const TrayDeliveryDialog: React.FC<TrayDeliveryDialogProps> = ({
         },
       });
 
-      if (result.success) {
-        onSuccess?.();
-        resetForm();
-        onClose();
+      if (result.success && result.data && !Array.isArray(result.data)) {
+        const tx = result.data as any;
+        const meta = (tx.metadata || {}) as Record<string, any>;
+        const options = values.counterpartyType === 'producer' ? producers : clients;
+        const selectedLabel =
+          options.find(o => o.id === counterpartyId)?.label ||
+          meta.counterpartyLabel ||
+          meta.counterpartyName ||
+          '';
+
+        const snapshot = buildTrayDeliverySnapshotFromParts({
+          transactionId: String(tx.id),
+          createdAt: tx.createdAt,
+          trayName: meta.trayLabel || tray.name,
+          quantity: Number(tx.amount) || amount,
+          counterpartyType: values.counterpartyType,
+          counterpartyName: meta.counterpartyName || selectedLabel.split(' - ')[0] || '—',
+          counterpartyLabel: meta.counterpartyLabel || selectedLabel || null,
+          productiveUnitName: meta.productiveUnitName || null,
+          reason: meta.reason || values.reason || null,
+          performedByName: meta.performedByName || null,
+          seasonName: meta.seasonName || seasonName || null,
+          stockBefore: meta.stockBefore ?? null,
+          stockAfter: meta.stockAfter ?? null,
+        });
+
+        setPrintSnapshot(snapshot);
+        setPrintOpen(true);
         return;
       }
 
@@ -289,27 +334,35 @@ const TrayDeliveryDialog: React.FC<TrayDeliveryDialogProps> = ({
   };
 
   return (
-    <Dialog
-      open={open}
-      onClose={handleClose}
-      title={`Entrega de bandejas · ${tray.name}`}
-      size="md"
-      data-test-id={dataTestId}
-    >
-      <CreateBaseForm
-        fields={deliveryFields}
-        values={values}
-        onChange={handleChange}
-        onSubmit={handleSubmit}
-        isSubmitting={isSubmitting}
-        submitLabel="Registrar entrega"
-        cancelButton
-        cancelButtonText="Cancelar"
-        onCancel={handleClose}
-        errors={formErrors}
-        data-test-id={dataTestId ? `${dataTestId}-form` : 'tray-delivery-form'}
+    <>
+      <Dialog
+        open={open && !printOpen}
+        onClose={handleClose}
+        title={`Entrega de bandejas · ${tray.name}`}
+        size="md"
+        data-test-id={dataTestId}
+      >
+        <CreateBaseForm
+          fields={deliveryFields}
+          values={values}
+          onChange={handleChange}
+          onSubmit={handleSubmit}
+          isSubmitting={isSubmitting}
+          submitLabel="Registrar entrega"
+          cancelButton
+          cancelButtonText="Cancelar"
+          onCancel={handleClose}
+          errors={formErrors}
+          data-test-id={dataTestId ? `${dataTestId}-form` : 'tray-delivery-form'}
+        />
+      </Dialog>
+
+      <PrintTrayDeliveryDialog
+        open={printOpen}
+        onClose={handlePrintClose}
+        snapshot={printSnapshot}
       />
-    </Dialog>
+    </>
   );
 };
 

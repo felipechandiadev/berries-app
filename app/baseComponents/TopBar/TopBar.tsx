@@ -54,6 +54,17 @@ const TopBar: React.FC<TopBarProps> = ({
         <div data-test-id="top-bar-root">
       <header className={`fixed top-0 z-30 w-full flex items-center justify-between px-10 py-2 pb-3 bg-background border-b-[2px] border-primary ${className}`}>
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={open}
+              className="flex h-10 w-10 items-center justify-center rounded-full transition-colors text-foreground hover:text-secondary focus:outline-none"
+              data-test-id="top-bar-menu-button"
+              aria-label="Abrir menú"
+            >
+              <span className="material-symbols-outlined text-2xl" aria-hidden>
+                menu
+              </span>
+            </button>
             {logoSrc ? (
               <>
                 {(!logoLoaded || logoError) && (
@@ -103,19 +114,6 @@ const TopBar: React.FC<TopBarProps> = ({
             {showUserButton && (
               <UserProfileDropdown />
             )}
-
-            {/* Menu button */}
-            <button
-              type="button"
-              onClick={open}
-              className="flex h-10 w-10 items-center justify-center rounded-full transition-colors text-foreground hover:text-secondary focus:outline-none"
-              data-test-id="top-bar-menu-button"
-              aria-label="Abrir menú"
-            >
-              <span className="material-symbols-outlined text-2xl" aria-hidden>
-                menu
-              </span>
-            </button>
           </div>
         </header>
         {/* Renderizar SideBar como modal, solo si showSidebar está activo */}

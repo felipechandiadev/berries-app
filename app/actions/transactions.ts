@@ -779,10 +779,13 @@ export async function createTrayDelivery(input: CreateTrayDeliveryInput): Promis
       }
 
       let counterpartyName: string | undefined;
+      let counterpartyLabel: string | undefined;
+      let productiveUnitName: string | undefined;
 
       if (input.counterpartyType === 'producer') {
         const producer = await queryRunner.manager.findOne(Producer, {
           where: { id: input.counterpartyId, deletedAt: IsNull() },
+          relations: ['productiveUnit'],
         });
 
         if (!producer) {
@@ -790,6 +793,11 @@ export async function createTrayDelivery(input: CreateTrayDeliveryInput): Promis
         }
 
         counterpartyName = producer.name?.trim() || undefined;
+        counterpartyLabel =
+          producer.name && producer.dni
+            ? `${producer.name} - ${producer.dni}`
+            : producer.name?.trim() || undefined;
+        productiveUnitName = producer.productiveUnit?.name?.trim() || undefined;
       } else {
         const customer = await queryRunner.manager.getRepository(Customer).findOne({
           where: { id: input.counterpartyId, deletedAt: IsNull() },
@@ -801,6 +809,9 @@ export async function createTrayDelivery(input: CreateTrayDeliveryInput): Promis
         }
 
         counterpartyName = customer.person?.name?.trim() || undefined;
+        const dni = customer.person?.dni?.trim();
+        counterpartyLabel =
+          counterpartyName && dni ? `${counterpartyName} - ${dni}` : counterpartyName;
       }
 
       await queryRunner.manager.update(Tray, input.trayId, { stock: newStock });
@@ -820,6 +831,9 @@ export async function createTrayDelivery(input: CreateTrayDeliveryInput): Promis
         counterpartyType: input.counterpartyType,
         counterpartyId: input.counterpartyId,
         counterpartyName,
+        seasonName: season.name,
+        ...(counterpartyLabel ? { counterpartyLabel } : {}),
+        ...(productiveUnitName ? { productiveUnitName } : {}),
       };
 
       savedTransaction = await queryRunner.manager.save(Transaction, {
@@ -1049,6 +1063,8 @@ export interface TrayTransactionRow {
   id: string;
   createdAt: Date;
   type: string; // User-friendly type name
+  /** Raw TransactionType enum value. */
+  typeCode: string;
   direction: TransactionDirection;
   amount: number;
   trayName: string;
@@ -1197,6 +1213,7 @@ export async function getTrayTransactions(params?: GetTrayTransactionsParams): P
         id: transaction.id.toString(),
         createdAt: transaction.createdAt,
         type: translateTransactionType(transaction.type),
+        typeCode: transaction.type,
         direction: transaction.direction,
         amount: Number(transaction.amount),
         trayName,
@@ -1239,6 +1256,9 @@ export interface DetailedTrayTransaction {
   trayName?: string;
   trayType?: string;
   counterpartyName?: string;
+  counterpartyLabel?: string;
+  counterpartyType?: 'producer' | 'client';
+  productiveUnitName?: string;
   reason?: string;
   performedByName?: string;
   stockBefore?: number;
@@ -1302,6 +1322,17 @@ export async function getDetailedTrayTransaction(id: string): Promise<GetDetaile
       }
     }
 
+    const counterpartyTypeFromMeta =
+      metadata.counterpartyType === 'producer' || metadata.counterpartyType === 'client'
+        ? metadata.counterpartyType
+        : transaction.type === TransactionType.TRAY_DELIVERY_TO_PRODUCER ||
+            transaction.type === TransactionType.TRAY_RECEPTION_FROM_PRODUCER
+          ? 'producer'
+          : transaction.type === TransactionType.TRAY_DELIVERY_TO_CLIENT ||
+              transaction.type === TransactionType.TRAY_RECEPTION_FROM_CLIENT
+            ? 'client'
+            : undefined;
+
     const detailedTransaction: DetailedTrayTransaction = {
       id: String(transaction.id),
       type: transaction.type,
@@ -1317,6 +1348,9 @@ export async function getDetailedTrayTransaction(id: string): Promise<GetDetaile
       trayName: trayInfo?.name || metadata.trayLabel || metadata.trayName || 'Desconocida',
       trayType: trayInfo?.varietyName || trayInfo?.formatName || '—',
       counterpartyName: metadata.counterpartyName || '—',
+      counterpartyLabel: metadata.counterpartyLabel || undefined,
+      counterpartyType: counterpartyTypeFromMeta,
+      productiveUnitName: metadata.productiveUnitName || undefined,
       reason: metadata.reason || '—',
       performedByName: metadata.performedByName || transaction.user?.person?.name || transaction.user?.userName || '—',
       stockBefore: metadata.stockBefore,

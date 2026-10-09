@@ -1,11 +1,22 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Dialog from '@/app/baseComponents/Dialog/Dialog';
 import IconButton from '@/app/baseComponents/IconButton/IconButton';
 import { formatAuditDate } from '@/lib/dateTimeUtils';
-import { getDetailedTrayTransaction, type TrayTransactionRow, type DetailedTrayTransaction } from '@/app/actions/transactions';
+import {
+  getDetailedTrayTransaction,
+  type TrayTransactionRow,
+  type DetailedTrayTransaction,
+} from '@/app/actions/transactions';
+import { TransactionType } from '@/data/entities/Transaction';
 import { translateTransactionType } from '@/lib/transactionUtils';
+import {
+  buildTrayDeliverySnapshotFromParts,
+  type TrayDeliveryTicketSnapshot,
+} from '@/lib/printing';
+import { usePermissions } from '@/app/state/hooks/usePermissions';
+import PrintTrayDeliveryDialog from './PrintTrayDeliveryDialog';
 
 interface DetailTrayTransactionProps {
   transaction: TrayTransactionRow;
@@ -16,36 +27,91 @@ const currencyFormatter = new Intl.NumberFormat('es-CL', {
   maximumFractionDigits: 0,
 });
 
-export default function DetailTrayTransaction({ transaction }: DetailTrayTransactionProps) {
-  // Safety check for transaction prop
-  if (!transaction) {
+const DELIVERY_TYPES = new Set([
+  TransactionType.TRAY_DELIVERY_TO_PRODUCER,
+  TransactionType.TRAY_DELIVERY_TO_CLIENT,
+]);
+
+function isTrayDeliveryType(typeCode?: string, type?: string): boolean {
+  if (typeCode && DELIVERY_TYPES.has(typeCode as TransactionType)) {
+    return true;
+  }
+  return type === TransactionType.TRAY_DELIVERY_TO_PRODUCER
+    || type === TransactionType.TRAY_DELIVERY_TO_CLIENT;
+}
+
+function toPrintSnapshot(detail: DetailedTrayTransaction): TrayDeliveryTicketSnapshot | null {
+  if (!isTrayDeliveryType(detail.type, detail.type)) {
     return null;
   }
 
+  const counterpartyType =
+    detail.counterpartyType
+    || (detail.type === TransactionType.TRAY_DELIVERY_TO_CLIENT ? 'client' : 'producer');
+
+  const meta = (detail.metadata || {}) as Record<string, any>;
+
+  return buildTrayDeliverySnapshotFromParts({
+    transactionId: detail.id,
+    createdAt: detail.createdAt,
+    trayName: detail.trayName || '—',
+    quantity: Number(detail.amount) || 0,
+    counterpartyType,
+    counterpartyName: detail.counterpartyName || '—',
+    counterpartyLabel: detail.counterpartyLabel || detail.counterpartyName || null,
+    productiveUnitName: detail.productiveUnitName || null,
+    reason: detail.reason && detail.reason !== '—' ? detail.reason : null,
+    performedByName: detail.performedByName && detail.performedByName !== '—'
+      ? detail.performedByName
+      : null,
+    seasonName: detail.seasonName || meta.seasonName || null,
+    stockBefore: detail.stockBefore ?? meta.stockBefore ?? null,
+    stockAfter: detail.stockAfter ?? meta.stockAfter ?? null,
+  });
+}
+
+export default function DetailTrayTransaction({ transaction }: DetailTrayTransactionProps) {
+  const { has } = usePermissions();
   const [open, setOpen] = useState(false);
   const [detailedTransaction, setDetailedTransaction] = useState<DetailedTrayTransaction | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printSnapshot, setPrintSnapshot] = useState<TrayDeliveryTicketSnapshot | null>(null);
+  const [printLoading, setPrintLoading] = useState(false);
 
-  const handleOpen = async () => {
+  if (!transaction) {
+    return null;
+  }
+
+  const canReprint = has('TRAYS_DELIVERY') && isTrayDeliveryType(transaction.typeCode, transaction.type);
+
+  const loadDetail = async (): Promise<DetailedTrayTransaction | null> => {
     if (!transaction?.id) {
       setError('ID de transacción no válido');
-      setOpen(true);
-      return;
+      return null;
     }
 
+    const result = await getDetailedTrayTransaction(transaction.id);
+    if (result.success && result.data) {
+      return result.data;
+    }
+
+    setError(result.error || 'Error al cargar los detalles');
+    return null;
+  };
+
+  const handleOpen = async () => {
     setOpen(true);
     setLoading(true);
     setError(null);
 
     try {
-      const result = await getDetailedTrayTransaction(transaction.id);
-      if (result.success && result.data) {
-        setDetailedTransaction(result.data);
-      } else {
-        setError(result.error || 'Error al cargar los detalles');
+      const detail = await loadDetail();
+      if (detail) {
+        setDetailedTransaction(detail);
       }
-    } catch (err) {
+    } catch {
       setError('Error al cargar los detalles de la transacción');
     } finally {
       setLoading(false);
@@ -58,15 +124,57 @@ export default function DetailTrayTransaction({ transaction }: DetailTrayTransac
     setError(null);
   };
 
+  const handleReprint = async () => {
+    setPrintLoading(true);
+    setError(null);
+    try {
+      const detail = detailedTransaction ?? (await loadDetail());
+      if (!detail) {
+        return;
+      }
+      if (!detailedTransaction) {
+        setDetailedTransaction(detail);
+      }
+      const snapshot = toPrintSnapshot(detail);
+      if (!snapshot) {
+        setError('Esta transacción no admite reimpresión de ticket');
+        return;
+      }
+      setPrintSnapshot(snapshot);
+      setPrintOpen(true);
+    } catch {
+      setError('Error al preparar el comprobante');
+    } finally {
+      setPrintLoading(false);
+    }
+  };
+
+  const handlePrintClose = () => {
+    setPrintOpen(false);
+    setPrintSnapshot(null);
+  };
+
   return (
     <>
-      <IconButton
-        icon="more_horiz"
-        variant="text"
-        size="sm"
-        onClick={handleOpen}
-        ariaLabel="Ver detalles de la transacción"
-      />
+      <div className="flex items-center gap-1">
+        {canReprint && (
+          <IconButton
+            icon="print"
+            variant="text"
+            size="sm"
+            onClick={handleReprint}
+            disabled={printLoading}
+            ariaLabel="Reimprimir comprobante de entrega"
+          />
+        )}
+        <IconButton
+          icon="more_horiz"
+          variant="text"
+          size="sm"
+          onClick={handleOpen}
+          ariaLabel="Ver detalles de la transacción"
+        />
+      </div>
 
       <Dialog
         open={open}
@@ -90,7 +198,19 @@ export default function DetailTrayTransaction({ transaction }: DetailTrayTransac
 
         {detailedTransaction && !loading && !error && (
           <div className="flex flex-col gap-4 p-1">
-            {/* Información básica */}
+            <div className="flex justify-end">
+              {canReprint && (
+                <IconButton
+                  icon="print"
+                  variant="basicSecondary"
+                  size="sm"
+                  onClick={handleReprint}
+                  disabled={printLoading}
+                  ariaLabel="Reimprimir comprobante de entrega"
+                />
+              )}
+            </div>
+
             <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
               <div className="border-b border-gray-200 pb-2 mb-3">
                 <h3 className="font-semibold text-gray-900">Información General</h3>
@@ -117,7 +237,6 @@ export default function DetailTrayTransaction({ transaction }: DetailTrayTransac
               </div>
             </section>
 
-            {/* Fechas */}
             <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
               <div className="grid grid-cols-1 gap-4">
                 <div>
@@ -127,7 +246,6 @@ export default function DetailTrayTransaction({ transaction }: DetailTrayTransac
               </div>
             </section>
 
-            {/* Detalles específicos de bandejas */}
             <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
               <div className="border-b border-gray-200 pb-2 mb-3">
                 <h3 className="font-semibold text-gray-900">Detalles de Bandeja</h3>
@@ -162,6 +280,12 @@ export default function DetailTrayTransaction({ transaction }: DetailTrayTransac
           </div>
         )}
       </Dialog>
+
+      <PrintTrayDeliveryDialog
+        open={printOpen}
+        onClose={handlePrintClose}
+        snapshot={printSnapshot}
+      />
     </>
   );
 }

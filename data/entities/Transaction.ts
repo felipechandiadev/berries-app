@@ -92,6 +92,10 @@ export interface TrayMovementMetadata {
   counterpartyType?: 'producer' | 'client';
   counterpartyId?: string;
   counterpartyName?: string;
+  /** "Nombre - RUT" para tickets. */
+  counterpartyLabel?: string;
+  productiveUnitName?: string;
+  seasonName?: string;
 }
 
 export interface TrayDeliveryMetadata extends TrayMovementMetadata {
