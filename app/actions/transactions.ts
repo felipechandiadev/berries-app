@@ -411,6 +411,7 @@ export interface UpdateTrayTransactionDateInput {
 
 /**
  * Actualiza la fecha de registro de un movimiento de bandejas.
+ * Usa update por criterios `{ id }` (evitar bare bigint, TypeORM 0.3 lanza Empty criteria).
  */
 export async function updateTrayTransactionDate(
   input: UpdateTrayTransactionDateInput
@@ -445,56 +446,67 @@ export async function updateTrayTransactionDate(
     }
 
     const db = await getDb();
-    const existing = await db.getRepository(Transaction).findOne({
-      where: { id: BigInt(transactionId), deletedAt: IsNull() },
-    });
+    const id = BigInt(transactionId);
 
-    if (!existing) {
-      return { success: false, error: 'Transacción no encontrada' };
-    }
+    await db.manager.transaction(async (manager) => {
+      const existing = await manager.getRepository(Transaction).findOne({
+        where: { id, deletedAt: IsNull() },
+      });
 
-    if (!TRAY_TRANSACTION_TYPES.includes(existing.type)) {
-      return { success: false, error: 'Solo se puede editar la fecha de movimientos de bandejas' };
-    }
+      if (!existing) {
+        throw new Error('Transacción no encontrada');
+      }
 
-    const reason = input.reason?.trim();
-    let metadata = existing.metadata as any;
-    if (typeof metadata === 'string') {
-      try {
-        metadata = JSON.parse(metadata);
-      } catch {
+      if (!TRAY_TRANSACTION_TYPES.includes(existing.type)) {
+        throw new Error('Solo se puede editar la fecha de movimientos de bandejas');
+      }
+
+      const reason = input.reason?.trim();
+      let metadata = existing.metadata as any;
+      if (typeof metadata === 'string') {
+        try {
+          metadata = JSON.parse(metadata);
+        } catch {
+          metadata = {};
+        }
+      }
+      if (!metadata || typeof metadata !== 'object') {
         metadata = {};
       }
-    }
-    if (!metadata || typeof metadata !== 'object') {
-      metadata = {};
-    }
 
-    if (reason) {
-      metadata = {
-        ...metadata,
-        dateChangeReason: reason,
-        dateChangedAt: new Date().toISOString(),
-        dateChangedBy: sessionUserId,
-      };
-    }
-
-    const result = await updateTransaction(
-      {
-        id: BigInt(transactionId),
+      const updatePayload: Partial<Transaction> = {
         createdAt: createdAtDate,
-        ...(reason ? { metadata } : {}),
-      },
-      sessionUserId
-    );
+      };
 
-    if (result.success) {
-      revalidatePath('/home/storage/trays');
-    }
+      if (reason) {
+        updatePayload.metadata = {
+          ...metadata,
+          dateChangeReason: reason,
+          dateChangedAt: new Date().toISOString(),
+          dateChangedBy: sessionUserId,
+        } as any;
+      }
 
-    return result.success
-      ? { success: true, message: 'Fecha del movimiento actualizada exitosamente' }
-      : result;
+      // Criterio objeto: bare bigint en manager.update provoca "Empty criteria(s)"
+      await manager.getRepository(Transaction).update({ id }, updatePayload);
+
+      await logTransactionAudit(
+        manager,
+        transactionId,
+        AuditActionType.UPDATE,
+        sessionUserId,
+        { createdAt: existing.createdAt, metadata: existing.metadata },
+        {
+          type: existing.type,
+          createdAt: createdAtDate,
+          ...(reason ? { metadata: updatePayload.metadata, dateChangeReason: reason } : {}),
+        }
+      );
+    });
+
+    revalidatePath('/home/storage/trays');
+
+    return { success: true, message: 'Fecha del movimiento actualizada exitosamente' };
   } catch (error: any) {
     console.error('[updateTrayTransactionDate] Error:', error);
     return {
@@ -565,7 +577,8 @@ export async function updateTransaction(data: UpdateTransactionInput, auditUserI
         }
       }
 
-      await manager.update(Transaction, data.id, updateData);
+      // Usar criterio objeto: bare bigint provoca "Empty criteria(s) are not allowed"
+      await manager.getRepository(Transaction).update({ id: data.id }, updateData);
 
       // Registrar auditoría
       await logTransactionAudit(
@@ -639,7 +652,7 @@ export async function deleteTransaction(id: bigint, auditUserId?: string): Promi
     };
 
     await db.manager.transaction(async (manager) => {
-      await manager.update(Transaction, id, {
+      await manager.getRepository(Transaction).update({ id }, {
         deletedAt: new Date(),
       });
 
