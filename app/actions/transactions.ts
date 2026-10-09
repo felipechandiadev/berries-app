@@ -391,6 +391,119 @@ export async function createTransaction(data: CreateTransactionInput, auditUserI
   }
 }
 
+const TRAY_TRANSACTION_TYPES: TransactionType[] = [
+  TransactionType.TRAY_ADJUSTMENT,
+  TransactionType.TRAY_IN_FROM_PRODUCER,
+  TransactionType.TRAY_OUT_TO_PRODUCER,
+  TransactionType.TRAY_OUT_TO_CLIENT,
+  TransactionType.TRAY_IN_FROM_CLIENT,
+  TransactionType.TRAY_RECEPTION_FROM_PRODUCER,
+  TransactionType.TRAY_RECEPTION_FROM_CLIENT,
+  TransactionType.TRAY_DELIVERY_TO_PRODUCER,
+  TransactionType.TRAY_DELIVERY_TO_CLIENT,
+];
+
+export interface UpdateTrayTransactionDateInput {
+  transactionId: string;
+  createdAt: string | Date;
+  reason?: string;
+}
+
+/**
+ * Actualiza la fecha de registro de un movimiento de bandejas.
+ */
+export async function updateTrayTransactionDate(
+  input: UpdateTrayTransactionDateInput
+): Promise<TransactionResult> {
+  try {
+    const { userId: sessionUserId } = await getCurrentUserSession();
+    if (!sessionUserId) {
+      return { success: false, error: 'Usuario no autenticado' };
+    }
+
+    const transactionId = String(input.transactionId || '').trim();
+    if (!transactionId) {
+      return { success: false, error: 'ID de transacción inválido' };
+    }
+
+    let createdAtDate: Date;
+    if (typeof input.createdAt === 'string') {
+      const raw = input.createdAt.trim();
+      // datetime-local (YYYY-MM-DDTHH:mm) se interpreta en zona Chile
+      const chileMoment = raw.includes('T')
+        ? moment.tz(raw, ['YYYY-MM-DDTHH:mm', 'YYYY-MM-DDTHH:mm:ss'], APP_TIMEZONE)
+        : moment.tz(raw, APP_TIMEZONE);
+      if (!chileMoment.isValid()) {
+        return { success: false, error: 'Fecha inválida' };
+      }
+      createdAtDate = new Date(chileMoment.format('YYYY-MM-DD HH:mm:ss'));
+    } else {
+      createdAtDate = input.createdAt;
+    }
+    if (!createdAtDate || Number.isNaN(createdAtDate.getTime())) {
+      return { success: false, error: 'Fecha inválida' };
+    }
+
+    const db = await getDb();
+    const existing = await db.getRepository(Transaction).findOne({
+      where: { id: BigInt(transactionId), deletedAt: IsNull() },
+    });
+
+    if (!existing) {
+      return { success: false, error: 'Transacción no encontrada' };
+    }
+
+    if (!TRAY_TRANSACTION_TYPES.includes(existing.type)) {
+      return { success: false, error: 'Solo se puede editar la fecha de movimientos de bandejas' };
+    }
+
+    const reason = input.reason?.trim();
+    let metadata = existing.metadata as any;
+    if (typeof metadata === 'string') {
+      try {
+        metadata = JSON.parse(metadata);
+      } catch {
+        metadata = {};
+      }
+    }
+    if (!metadata || typeof metadata !== 'object') {
+      metadata = {};
+    }
+
+    if (reason) {
+      metadata = {
+        ...metadata,
+        dateChangeReason: reason,
+        dateChangedAt: new Date().toISOString(),
+        dateChangedBy: sessionUserId,
+      };
+    }
+
+    const result = await updateTransaction(
+      {
+        id: BigInt(transactionId),
+        createdAt: createdAtDate,
+        ...(reason ? { metadata } : {}),
+      },
+      sessionUserId
+    );
+
+    if (result.success) {
+      revalidatePath('/home/storage/trays');
+    }
+
+    return result.success
+      ? { success: true, message: 'Fecha del movimiento actualizada exitosamente' }
+      : result;
+  } catch (error: any) {
+    console.error('[updateTrayTransactionDate] Error:', error);
+    return {
+      success: false,
+      error: error?.message || 'Error al actualizar la fecha del movimiento',
+    };
+  }
+}
+
 /**
  * PUT - Actualizar una transacción
  */

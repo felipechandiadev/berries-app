@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Dialog from '@/app/baseComponents/Dialog/Dialog';
 import IconButton from '@/app/baseComponents/IconButton/IconButton';
+import { Button } from '@/app/baseComponents/Button/Button';
 import { formatAuditDate } from '@/lib/dateTimeUtils';
 import {
   getDetailedTrayTransaction,
@@ -17,6 +19,7 @@ import {
 } from '@/lib/printing';
 import { usePermissions } from '@/app/state/hooks/usePermissions';
 import PrintTrayDeliveryDialog from './PrintTrayDeliveryDialog';
+import EditTrayTransactionDateDialog from './EditTrayTransactionDateDialog';
 
 interface DetailTrayTransactionProps {
   transaction: TrayTransactionRow;
@@ -71,6 +74,7 @@ function toPrintSnapshot(detail: DetailedTrayTransaction): TrayDeliveryTicketSna
 }
 
 export default function DetailTrayTransaction({ transaction }: DetailTrayTransactionProps) {
+  const router = useRouter();
   const { has } = usePermissions();
   const [open, setOpen] = useState(false);
   const [detailedTransaction, setDetailedTransaction] = useState<DetailedTrayTransaction | null>(null);
@@ -79,12 +83,14 @@ export default function DetailTrayTransaction({ transaction }: DetailTrayTransac
   const [printOpen, setPrintOpen] = useState(false);
   const [printSnapshot, setPrintSnapshot] = useState<TrayDeliveryTicketSnapshot | null>(null);
   const [printLoading, setPrintLoading] = useState(false);
+  const [editDateOpen, setEditDateOpen] = useState(false);
 
   if (!transaction) {
     return null;
   }
 
   const canReprint = has('TRAYS_DELIVERY') && isTrayDeliveryType(transaction.typeCode, transaction.type);
+  const canEditDate = has('TRAYS_UPDATE');
 
   const loadDetail = async (): Promise<DetailedTrayTransaction | null> => {
     if (!transaction?.id) {
@@ -122,6 +128,7 @@ export default function DetailTrayTransaction({ transaction }: DetailTrayTransac
     setOpen(false);
     setDetailedTransaction(null);
     setError(null);
+    setEditDateOpen(false);
   };
 
   const handleReprint = async () => {
@@ -154,6 +161,22 @@ export default function DetailTrayTransaction({ transaction }: DetailTrayTransac
     setPrintSnapshot(null);
   };
 
+  const handleDateUpdated = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const detail = await loadDetail();
+      if (detail) {
+        setDetailedTransaction(detail);
+      }
+      router.refresh();
+    } catch {
+      setError('Error al recargar los detalles');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <>
       <div className="flex items-center gap-1">
@@ -182,6 +205,35 @@ export default function DetailTrayTransaction({ transaction }: DetailTrayTransac
         title={`Detalle de Transacción #${transaction?.id || 'N/A'}`}
         size="md"
         showCloseButton={true}
+        headerActions={
+          canReprint ? (
+            <IconButton
+              icon="print"
+              variant="basicSecondary"
+              size="sm"
+              onClick={handleReprint}
+              disabled={printLoading || loading}
+              ariaLabel="Reimprimir comprobante de entrega"
+            />
+          ) : undefined
+        }
+        actions={
+          <div className="flex w-full items-center justify-end gap-2 border-t border-border px-4 pb-4 pt-3">
+            {canEditDate && detailedTransaction && !loading && (
+              <Button
+                variant="outlined"
+                size="sm"
+                onClick={() => setEditDateOpen(true)}
+                disabled={loading}
+              >
+                Editar fecha
+              </Button>
+            )}
+            <Button variant="primary" size="sm" onClick={handleClose}>
+              Cerrar
+            </Button>
+          </div>
+        }
       >
         {loading && (
           <div className="flex items-center justify-center py-8">
@@ -198,19 +250,6 @@ export default function DetailTrayTransaction({ transaction }: DetailTrayTransac
 
         {detailedTransaction && !loading && !error && (
           <div className="flex flex-col gap-4 p-1">
-            <div className="flex justify-end">
-              {canReprint && (
-                <IconButton
-                  icon="print"
-                  variant="basicSecondary"
-                  size="sm"
-                  onClick={handleReprint}
-                  disabled={printLoading}
-                  ariaLabel="Reimprimir comprobante de entrega"
-                />
-              )}
-            </div>
-
             <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
               <div className="border-b border-gray-200 pb-2 mb-3">
                 <h3 className="font-semibold text-gray-900">Información General</h3>
@@ -286,6 +325,16 @@ export default function DetailTrayTransaction({ transaction }: DetailTrayTransac
         onClose={handlePrintClose}
         snapshot={printSnapshot}
       />
+
+      {detailedTransaction && (
+        <EditTrayTransactionDateDialog
+          open={editDateOpen}
+          onClose={() => setEditDateOpen(false)}
+          transactionId={detailedTransaction.id}
+          currentDate={detailedTransaction.createdAt}
+          onSuccess={handleDateUpdated}
+        />
+      )}
     </>
   );
 }

@@ -47,6 +47,8 @@ interface DialogProps {
   closeButtonText?: string;
   // Callback when close button is clicked (in addition to onClose)
   onCloseButtonClick?: () => void;
+  // Optional actions rendered in the header, left of the close button
+  headerActions?: React.ReactNode;
   // Test ID for testing purposes
   'data-test-id'?: string;
 }
@@ -126,6 +128,7 @@ const Dialog: React.FC<DialogProps> = ({
   showCloseButton = false,
   closeButtonText = 'cerrar',
   onCloseButtonClick,
+  headerActions,
   'data-test-id': dataTestId,
 }) => {
   const [isVisible, setIsVisible] = useState(false);
@@ -271,15 +274,19 @@ const Dialog: React.FC<DialogProps> = ({
             <h2 className="title p-1 flex-1" data-test-id="dialog-title">
               {title}
             </h2>
-            {showCloseButton && (
-              <Button
-                variant="outlined"
-                size="sm"
-                onClick={handleCloseButtonClick}
-                className="ml-2"
-              >
-                {closeButtonText}
-              </Button>
+            {(headerActions || showCloseButton) && (
+              <div className="ml-2 flex items-center gap-2" data-test-id="dialog-header-actions">
+                {headerActions}
+                {showCloseButton && (
+                  <Button
+                    variant="outlined"
+                    size="sm"
+                    onClick={handleCloseButtonClick}
+                  >
+                    {closeButtonText}
+                  </Button>
+                )}
+              </div>
             )}
           </div>
         )}
