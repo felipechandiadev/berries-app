@@ -205,7 +205,7 @@ export async function getTrayById(id: string): Promise<TrayResult> {
 
     return {
       success: true,
-      data: tray,
+      data: serializeTray(tray),
     };
   } catch (error: any) {
     console.error('[getTrayById] Error:', error);

@@ -57,7 +57,6 @@ export default function PrintTrayDeliveryDialog({
       size="sm"
       contentClassName="bg-white"
       printLabel="Imprimir recibo"
-      onBeforePrint={onClose}
       printStyles={thermalPrintStyles}
       onPrintTicket={handlePrintTicket}
       ticketLabel="Ticket USB"

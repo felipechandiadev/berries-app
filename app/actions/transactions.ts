@@ -771,15 +771,20 @@ export async function createTrayAdjustment(input: CreateTrayAdjustmentInput): Pr
 
       // 3. Validar y obtener bandeja
       const tray = await queryRunner.manager.findOne(Tray, {
-        where: { id: input.trayId, deletedAt: IsNull() }
+        where: { id: input.trayId, deletedAt: IsNull() },
+        lock: { mode: 'pessimistic_write' },
       });
       if (!tray) {
         await queryRunner.rollbackTransaction();
         return { success: false, error: 'Bandeja no encontrada' };
       }
+      if (!tray.active) {
+        await queryRunner.rollbackTransaction();
+        return { success: false, error: 'No se puede ajustar el stock de una bandeja inactiva' };
+      }
 
       // 4. Calcular nuevo stock
-      const newStock = tray.stock + input.amount;
+      const newStock = Number(tray.stock ?? 0) + input.amount;
       if (newStock < 0) {
         await queryRunner.rollbackTransaction();
         return { success: false, error: 'Stock insuficiente para el ajuste' };
@@ -891,10 +896,15 @@ export async function createTrayDelivery(input: CreateTrayDeliveryInput): Promis
 
       const tray = await queryRunner.manager.findOne(Tray, {
         where: { id: input.trayId, deletedAt: IsNull() },
+        lock: { mode: 'pessimistic_write' },
       });
 
       if (!tray) {
         throw new Error('Bandeja no encontrada');
+      }
+
+      if (!tray.active) {
+        throw new Error('No se puede entregar una bandeja inactiva');
       }
 
       const stockBefore = Number(tray.stock ?? 0);
@@ -1063,10 +1073,15 @@ export async function createTrayReception(input: CreateTrayReceptionInput): Prom
 
       const tray = await queryRunner.manager.findOne(Tray, {
         where: { id: input.trayId, deletedAt: IsNull() },
+        lock: { mode: 'pessimistic_write' },
       });
 
       if (!tray) {
         throw new Error('Bandeja no encontrada');
+      }
+
+      if (!tray.active) {
+        throw new Error('No se puede recibir una bandeja inactiva');
       }
 
       const stockBefore = Number(tray.stock ?? 0);

@@ -1,5 +1,6 @@
 'use client';
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Badge from '@/app/baseComponents/Badge/Badge';
 import IconButton from '@/app/baseComponents/IconButton/IconButton';
 import DeleteTrayDialog from './DeleteTrayDialog';
@@ -24,12 +25,14 @@ export interface TrayCardProps {
 }
 
 const TrayCard: React.FC<TrayCardProps> = ({ tray, 'data-test-id': dataTestId }) => {
+  const router = useRouter();
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [openUpdateDialog, setOpenUpdateDialog] = useState(false);
   const [openAdjustmentDialog, setOpenAdjustmentDialog] = useState(false);
   const [openReceptionDialog, setOpenReceptionDialog] = useState(false);
   const [openDeliveryDialog, setOpenDeliveryDialog] = useState(false);
   const { has } = usePermissions();
+  const canMoveStock = Boolean(tray.active);
 
   const formatWeight = (weight: number) => {
     return `${weight.toFixed(3)} kg`;
@@ -79,8 +82,9 @@ const TrayCard: React.FC<TrayCardProps> = ({ tray, 'data-test-id': dataTestId })
             <IconButton
               icon="arrow_upward"
               variant="basicSecondary"
-              aria-label={`Registrar entrega de bandejas ${tray.name}`}
+              aria-label={canMoveStock ? `Registrar entrega de bandejas ${tray.name}` : 'Bandeja inactiva: no se puede entregar'}
               onClick={() => setOpenDeliveryDialog(true)}
+              disabled={!canMoveStock}
               data-test-id={`${dataTestId}-delivery-button`}
             />
           )}
@@ -88,8 +92,9 @@ const TrayCard: React.FC<TrayCardProps> = ({ tray, 'data-test-id': dataTestId })
             <IconButton
               icon="arrow_downward"
               variant="basicSecondary"
-              aria-label={`Registrar recepción de bandejas ${tray.name}`}
+              aria-label={canMoveStock ? `Registrar recepción de bandejas ${tray.name}` : 'Bandeja inactiva: no se puede recibir'}
               onClick={() => setOpenReceptionDialog(true)}
+              disabled={!canMoveStock}
               data-test-id={`${dataTestId}-reception-button`}
             />
           )}
@@ -97,8 +102,9 @@ const TrayCard: React.FC<TrayCardProps> = ({ tray, 'data-test-id': dataTestId })
             <IconButton
               icon="checkbook"
               variant="basicSecondary"
-              aria-label={`Ajustar stock de bandeja ${tray.name}`}
+              aria-label={canMoveStock ? `Ajustar stock de bandeja ${tray.name}` : 'Bandeja inactiva: no se puede ajustar stock'}
               onClick={() => setOpenAdjustmentDialog(true)}
+              disabled={!canMoveStock}
               data-test-id={`${dataTestId}-adjustment-button`}
             />
           )}
@@ -130,7 +136,7 @@ const TrayCard: React.FC<TrayCardProps> = ({ tray, 'data-test-id': dataTestId })
         tray={tray}
         onSuccess={() => {
           setOpenUpdateDialog(false);
-          window.location.reload(); // Recargar para actualizar datos
+          router.refresh();
         }}
         data-test-id={`${dataTestId}-update-dialog`}
       />
@@ -141,7 +147,7 @@ const TrayCard: React.FC<TrayCardProps> = ({ tray, 'data-test-id': dataTestId })
         tray={tray}
         onSuccess={() => {
           setOpenDeleteDialog(false);
-          window.location.reload(); // Recargar para actualizar datos
+          router.refresh();
         }}
         data-test-id={`${dataTestId}-delete-dialog`}
       />
@@ -153,7 +159,7 @@ const TrayCard: React.FC<TrayCardProps> = ({ tray, 'data-test-id': dataTestId })
         mode="adjustment"
         onSuccess={() => {
           setOpenAdjustmentDialog(false);
-          window.location.reload(); // Recargar para actualizar datos
+          router.refresh();
         }}
         data-test-id={`${dataTestId}-adjustment-dialog`}
       />
@@ -164,7 +170,7 @@ const TrayCard: React.FC<TrayCardProps> = ({ tray, 'data-test-id': dataTestId })
         tray={tray}
         onSuccess={() => {
           setOpenReceptionDialog(false);
-          window.location.reload();
+          router.refresh();
         }}
         data-test-id={`${dataTestId}-reception-dialog`}
       />
@@ -175,7 +181,7 @@ const TrayCard: React.FC<TrayCardProps> = ({ tray, 'data-test-id': dataTestId })
         tray={tray}
         onSuccess={() => {
           setOpenDeliveryDialog(false);
-          window.location.reload();
+          router.refresh();
         }}
         data-test-id={`${dataTestId}-delivery-dialog`}
       />

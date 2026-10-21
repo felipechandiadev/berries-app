@@ -7,6 +7,7 @@ import CreateBaseForm, { type BaseFormFieldGroup } from '@/app/baseComponents/Ba
 import { getActiveSeason } from '@/app/actions/seasons';
 import { getProducersSimpleListWithLabel } from '@/app/actions/producers';
 import { getCustomersSimpleListWithLabel } from '@/app/actions/customers';
+import { getTrayById } from '@/app/actions/trays';
 import { createTrayDelivery, type TrayMovementCounterparty } from '@/app/actions/transactions';
 import {
   buildTrayDeliverySnapshotFromParts,
@@ -78,6 +79,51 @@ const TrayDeliveryDialog: React.FC<TrayDeliveryDialogProps> = ({
   const [clients, setClients] = useState<SelectOption[]>([]);
   const [printOpen, setPrintOpen] = useState(false);
   const [printSnapshot, setPrintSnapshot] = useState<TrayDeliveryTicketSnapshot | null>(null);
+  const [liveStock, setLiveStock] = useState<number>(Number(tray.stock) || 0);
+  const [liveActive, setLiveActive] = useState<boolean>(Boolean(tray.active));
+  const [isLoadingStock, setIsLoadingStock] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    let isMounted = true;
+    setIsLoadingStock(true);
+
+    const loadStock = async () => {
+      try {
+        const result = await getTrayById(tray.id);
+        if (!isMounted) return;
+        const data = result.success && result.data && !Array.isArray(result.data)
+          ? result.data
+          : null;
+        if (data) {
+          setLiveStock(Number((data as any).stock) || 0);
+          setLiveActive(Boolean((data as any).active));
+        } else {
+          setLiveStock(Number(tray.stock) || 0);
+          setLiveActive(Boolean(tray.active));
+        }
+      } catch (err) {
+        console.error('[TrayDeliveryDialog] Error loading tray stock:', err);
+        if (isMounted) {
+          setLiveStock(Number(tray.stock) || 0);
+          setLiveActive(Boolean(tray.active));
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingStock(false);
+        }
+      }
+    };
+
+    void loadStock();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [open, tray.id, tray.stock, tray.active]);
 
   useEffect(() => {
     if (!open || hasLoadedOptions) {
@@ -143,8 +189,8 @@ const TrayDeliveryDialog: React.FC<TrayDeliveryDialogProps> = ({
 
   const finishDeliveryFlow = () => {
     resetForm();
-    onSuccess?.();
     onClose();
+    onSuccess?.();
   };
 
   const handleClose = () => {
@@ -164,10 +210,10 @@ const TrayDeliveryDialog: React.FC<TrayDeliveryDialogProps> = ({
   const estimatedStock = useMemo(() => {
     const amount = Number(values.amount);
     if (!Number.isFinite(amount)) {
-      return tray.stock;
+      return liveStock;
     }
-    return tray.stock - amount;
-  }, [tray.stock, values.amount]);
+    return liveStock - amount;
+  }, [liveStock, values.amount]);
 
   const deliveryFields: BaseFormFieldGroup[] = useMemo(() => {
     const counterpartyField = values.counterpartyType === 'client'
@@ -186,7 +232,8 @@ const TrayDeliveryDialog: React.FC<TrayDeliveryDialogProps> = ({
           options: producers,
         };
 
-    const summarySubtitle = `Stock actual: ${tray.stock} bandejas${Number.isFinite(estimatedStock) ? ` · Stock estimado: ${Math.max(estimatedStock, 0)} bandejas` : ''}`;
+    const stockLabel = isLoadingStock ? 'cargando...' : `${liveStock} bandejas`;
+    const summarySubtitle = `Stock actual: ${stockLabel}${!isLoadingStock && Number.isFinite(estimatedStock) ? ` · Stock estimado: ${Math.max(estimatedStock, 0)} bandejas` : ''}`;
 
     return [
       {
@@ -209,7 +256,7 @@ const TrayDeliveryDialog: React.FC<TrayDeliveryDialogProps> = ({
             type: 'numberStepper',
             required: true,
             min: 0,
-            max: tray.stock,
+            max: liveStock,
             step: 1,
           },
           {
@@ -220,13 +267,18 @@ const TrayDeliveryDialog: React.FC<TrayDeliveryDialogProps> = ({
         ],
       },
     ];
-  }, [clients, estimatedStock, isLoadingOptions, producers, tray.stock, values.counterpartyType]);
+  }, [clients, estimatedStock, isLoadingOptions, isLoadingStock, liveStock, producers, values.counterpartyType]);
 
   const handleSubmit = async () => {
     setFormErrors([]);
 
     if (!currentUserId) {
       setFormErrors(['Usuario no autenticado']);
+      return;
+    }
+
+    if (!liveActive) {
+      setFormErrors(['No se puede entregar una bandeja inactiva']);
       return;
     }
 
@@ -237,14 +289,14 @@ const TrayDeliveryDialog: React.FC<TrayDeliveryDialogProps> = ({
       return;
     }
 
-    if (tray.stock <= 0) {
+    if (liveStock <= 0) {
       const message = 'No hay stock disponible para entregar esta bandeja';
       setFormErrors([message]);
       return;
     }
 
-    if (amount > tray.stock) {
-      const message = `No puedes entregar más de ${tray.stock} bandejas disponibles`;
+    if (amount > liveStock) {
+      const message = `No puedes entregar más de ${liveStock} bandejas disponibles`;
       setFormErrors([message]);
       return;
     }
