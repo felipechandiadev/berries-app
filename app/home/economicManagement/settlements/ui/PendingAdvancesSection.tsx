@@ -2,10 +2,15 @@
 
 import type { PendingAdvancesResult } from '@/app/actions/settlements';
 import PendingAdvancesTable from './PendingAdvancesTable';
+import MonthFilter from './MonthFilter';
+import { MONTH_FILTER_ALL, type MonthFilterOption } from '@/lib/monthFilter';
 
 interface PendingAdvancesSectionProps {
   selectedProducerId?: string;
   data: PendingAdvancesResult;
+  monthOptions: MonthFilterOption[];
+  monthFilter: string;
+  onMonthChange: (value: string) => void;
   selectedIds: Set<string>;
   onToggle: (id: string, checked: boolean) => void;
 }
@@ -15,6 +20,9 @@ const emptyStateClass = 'rounded-lg border border-dashed border-border bg-muted/
 export default function PendingAdvancesSection({
   selectedProducerId,
   data,
+  monthOptions,
+  monthFilter,
+  onMonthChange,
   selectedIds,
   onToggle,
 }: PendingAdvancesSectionProps) {
@@ -27,6 +35,15 @@ export default function PendingAdvancesSection({
         <h2 className="text-base font-semibold text-primary">Anticipos pendientes</h2>
       </header>
 
+      {hasSelection && (
+        <MonthFilter
+          options={monthOptions}
+          value={monthFilter}
+          onChange={onMonthChange}
+          data-test-id="advances-month-filter"
+        />
+      )}
+
       {!hasSelection && (
         <div className={emptyStateClass}>
           Selecciona un productor para revisar los anticipos pendientes de liquidación.
@@ -35,7 +52,7 @@ export default function PendingAdvancesSection({
 
       {hasSelection && !hasRows && (
         <div className={`${emptyStateClass} mt-2`}>
-          No se encontraron anticipos pendientes para este productor.
+          No se encontraron anticipos pendientes para este productor{monthFilter === MONTH_FILTER_ALL ? '' : ' en el mes seleccionado'}.
         </div>
       )}
 

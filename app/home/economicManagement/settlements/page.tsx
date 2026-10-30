@@ -59,16 +59,17 @@ export default async function SettlementsPage({
 
   const [producerOptions, pendingReceptions, pendingAdvances, settlementsResult] = await Promise.all([
     getProducersSimpleListWithLabel(),
+    // La selección necesita todas las recepciones/anticipos pendientes del productor, no solo una página.
     listPendingReceptions({ 
       producerId: effectiveProducerId, 
-      page, 
-      limit,
+      page: 1, 
+      limit: 500,
       includeSettlementId: editId 
     }),
     listPendingAdvances({ 
       producerId: effectiveProducerId, 
-      page, 
-      limit,
+      page: 1, 
+      limit: 100,
       includeSettlementId: editId 
     }),
     listSettlements({ producerId, page, limit }),

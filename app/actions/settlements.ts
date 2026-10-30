@@ -5,7 +5,9 @@ import { Transaction, TransactionType, TransactionDirection, TransactionUnit, Ad
 import { TransactionRelation, TransactionRelationType } from '../../data/entities/TransactionRelation';
 import { ReceptionPack } from '../../data/entities/ReceptionPack';
 import { PersonBankAccount } from '../../data/entities/Person';
-import { In } from 'typeorm';
+import { AdminBankAccount } from '../../data/entities/AdminBankAccount';
+import { resolveSettlementStatus, type SettlementStatus } from '../../lib/receptionSettlement';
+import { In, IsNull } from 'typeorm';
 import { revalidatePath } from 'next/cache';
 import { logTransactionAudit } from './transactions';
 import { logSettlementAudit } from './audit.settlements';
@@ -33,6 +35,8 @@ export interface PendingReceptionRow {
   totalToPayUSD: number;
   exchangeRate: number;
   totalCLPToPay: number;
+  /** Recepción sin precio cargado (total a pagar en 0). */
+  isUnpriced: boolean;
 }
 
 export interface PendingReceptionsResult {
@@ -40,6 +44,9 @@ export interface PendingReceptionsResult {
   total: number;
   page: number;
   limit: number;
+  /** Recepciones sin precio entre las filas devueltas. */
+  unpricedCount: number;
+  unpricedKg: number;
 }
 export interface ListPendingAdvancesInput {
   producerId?: string;
@@ -100,6 +107,8 @@ export interface SettlementsResult {
 }
 
 const MAX_LIMIT = 100;
+// La pantalla de liquidación necesita ver todas las recepciones pendientes del productor, sin paginar.
+const MAX_PENDING_RECEPTIONS_LIMIT = 500;
 
 const toNumber = (value: unknown, fallback = 0): number => {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -198,7 +207,7 @@ export async function listPendingReceptions(
   const producerId = input.producerId?.trim();
   const page = Number.isFinite(input.page) ? Math.max(1, Math.floor(input.page as number)) : 1;
   const limitCandidate = Number.isFinite(input.limit) ? Math.max(1, Math.floor(input.limit as number)) : 25;
-  const limit = Math.min(limitCandidate, MAX_LIMIT);
+  const limit = Math.min(limitCandidate, MAX_PENDING_RECEPTIONS_LIMIT);
 
   if (!producerId) {
     return {
@@ -206,6 +215,8 @@ export async function listPendingReceptions(
       total: 0,
       page,
       limit,
+      unpricedCount: 0,
+      unpricedKg: 0,
     };
   }
 
@@ -219,7 +230,7 @@ export async function listPendingReceptions(
     .leftJoin(
       TransactionRelation,
       'settlementRelation',
-      'settlementRelation.childTransactionId = reception.id AND settlementRelation.relationType = :relationType',
+      'settlementRelation.parentTransactionId = reception.id AND settlementRelation.relationType = :relationType AND settlementRelation.deletedAt IS NULL',
       { relationType: TransactionRelationType.RECEPTION_TO_SETTLEMENT },
     )
     .where('reception.type = :receptionType', { receptionType: TransactionType.RECEPTION })
@@ -227,7 +238,7 @@ export async function listPendingReceptions(
     .andWhere('reception.producerId = :producerId', { producerId });
 
   if (input.includeSettlementId) {
-    qb.andWhere('(settlementRelation.id IS NULL OR settlementRelation.parentTransactionId = :includeSettlementId)', { includeSettlementId: BigInt(input.includeSettlementId) });
+    qb.andWhere('(settlementRelation.id IS NULL OR settlementRelation.childTransactionId = :includeSettlementId)', { includeSettlementId: String(input.includeSettlementId) });
   } else {
     qb.andWhere('settlementRelation.id IS NULL');
   }
@@ -349,6 +360,7 @@ export async function listPendingReceptions(
         totalToPayUSD: Number(totalToPayUSD),
         exchangeRate,
         totalCLPToPay: Number(totalCLPToPay),
+        isUnpriced: !(Number(totalCLPToPay) > 0),
       };
     } catch (error) {
       console.error('[listPendingReceptions] Error processing reception', reception.id, ':', error);
@@ -366,15 +378,22 @@ export async function listPendingReceptions(
         totalToPayUSD: 0,
         exchangeRate: 0,
         totalCLPToPay: 0,
+        isUnpriced: true,
       };
     }
   });
 
+  // Con valor primero (conservando el orden por fecha dentro de cada grupo).
+  const sortedRows = [...rows].sort((a, b) => Number(a.isUnpriced) - Number(b.isUnpriced));
+  const unpricedRows = sortedRows.filter((row) => row.isUnpriced);
+
   return {
-    rows,
+    rows: sortedRows,
     total,
     page,
     limit,
+    unpricedCount: unpricedRows.length,
+    unpricedKg: unpricedRows.reduce((sum, row) => sum + row.netWeightKg, 0),
   };
 }
 
@@ -542,13 +561,13 @@ export async function listPendingAdvances(
     const rawRelations = await db
       .getRepository(TransactionRelation)
       .createQueryBuilder('relation')
-      .select('relation.childTransactionId', 'advanceId')
+      .select('relation.parentTransactionId', 'advanceId')
       .addSelect('relation.context', 'context')
       .where('relation.relationType = :relationType', { relationType: TransactionRelationType.ADVANCE_TO_SETTLEMENT })
-      .andWhere('relation.childTransactionId IN (:...ids)', { ids: advanceIds });
+      .andWhere('relation.parentTransactionId IN (:...ids)', { ids: advanceIds });
 
     if (input.includeSettlementId) {
-      rawRelations.andWhere('relation.parentTransactionId != :includeSettlementId', { includeSettlementId: BigInt(input.includeSettlementId) });
+      rawRelations.andWhere('relation.childTransactionId != :includeSettlementId', { includeSettlementId: String(input.includeSettlementId) });
     }
 
     const relations = await rawRelations.getRawMany<{ advanceId: string; context: string | null }>();
@@ -664,128 +683,318 @@ export interface CreateSettlementInput {
   userId: string;
 }
 
-export async function createSettlement(input: CreateSettlementInput) {
-  const db = await getDb();
+const RECEPTION_TOTAL_CLP_KEYS = ['totalCLPToPay', 'totalToPayCLP', 'payableCLP'];
+const RECEPTION_CLP_PORTION_KEYS = ['totalToPayCLP', 'payableCLP', 'clpAmount'];
+const RECEPTION_USD_KEYS = ['totalToPayUSD', 'payableUSD', 'usdAmount', 'usdToPay', 'totalUSDToPay', 'totalUsdToPay'];
 
-  // Validar que las recepciones y anticipos existan y pertenezcan al productor
-  const receptionIds = input.selectedReceptionIds;
-  const advanceIds = input.selectedAdvanceIds;
+/**
+ * Total a pagar de una recepción en CLP. Misma regla que usa `listPendingReceptions`,
+ * de modo que el monto que se ve en pantalla es el que se guarda en la liquidación.
+ */
+const receptionClpAmount = (reception: Transaction): number => {
+  const metadata = parseMetadata(reception.metadata);
+  const totals = (metadata?.totals ?? {}) as Record<string, unknown>;
+  const fallbackAmount = Math.max(0, toNumber(reception.amount, 0));
 
+  const fromTotals = resolveNumberFromKeys(totals, RECEPTION_TOTAL_CLP_KEYS, Number.NaN);
+  if (Number.isFinite(fromTotals)) {
+    return Math.max(0, fromTotals);
+  }
+
+  const clpPortion = resolveNumberFromKeys(totals, RECEPTION_CLP_PORTION_KEYS, Number.NaN);
+  if (Number.isFinite(clpPortion)) {
+    const usdPortion = Math.max(0, resolveNumberFromKeys(totals, RECEPTION_USD_KEYS, 0));
+    const rateCandidates = [
+      resolveNumberFromKeys(totals, ['exchangeRate', 'rate', 'exchangeRateValue'], Number.NaN),
+      toNumber(metadata?.exchangeRate, Number.NaN),
+      toNumber(metadata?.summary?.exchangeRate, Number.NaN),
+    ];
+    const rate = Math.max(0, rateCandidates.find((candidate) => Number.isFinite(candidate)) ?? 0);
+    return Math.max(0, clpPortion + usdPortion * rate);
+  }
+
+  return fallbackAmount;
+};
+
+export interface SettlementActionResult {
+  success: boolean;
+  settlementId?: string;
+  error?: string;
+}
+
+/**
+ * Crea o actualiza una liquidación en una sola transacción.
+ *
+ * Convención de relaciones (igual que reportes, dashboard y anticipos):
+ *  - RECEPTION_TO_SETTLEMENT: parent = recepción, child = liquidación
+ *  - ADVANCE_TO_SETTLEMENT:   parent = anticipo,  child = liquidación (context.amount = monto aplicado)
+ *
+ * Los totales se calculan aquí a partir de la base de datos; los que manda el
+ * navegador (`input.totals`) se ignoran.
+ */
+async function saveSettlementCore(
+  input: CreateSettlementInput,
+  existingSettlementId?: string,
+): Promise<SettlementActionResult> {
+  const producerId = input.producerId?.trim();
+  const userId = input.userId?.trim();
+  const seasonId = input.seasonId?.trim();
+  const status: SettlementStatus = input.isDraft ? 'BORRADOR' : 'COMPLETA';
+  const receptionIds = [...new Set((input.selectedReceptionIds ?? []).map(String).filter(Boolean))];
+  const advanceIds = [...new Set((input.selectedAdvanceIds ?? []).map(String).filter(Boolean))];
+
+  if (!producerId) {
+    return { success: false, error: 'Debe seleccionar un productor.' };
+  }
+  if (!userId) {
+    return { success: false, error: 'Usuario no autenticado.' };
+  }
+  if (!seasonId) {
+    return { success: false, error: 'No hay una temporada activa.' };
+  }
   if (receptionIds.length === 0) {
-    throw new Error('Debe seleccionar al menos una recepción');
+    return { success: false, error: 'Debe seleccionar al menos una recepción.' };
   }
 
-  if (input.totals.balance < 0) {
-    throw new Error('El balance no puede ser negativo');
+  try {
+    const db = await getDb();
+
+    const settlementId = await db.transaction(async (manager) => {
+      const txRepo = manager.getRepository(Transaction);
+      const relRepo = manager.getRepository(TransactionRelation);
+
+      let settlement: Transaction | null = null;
+      if (existingSettlementId) {
+        settlement = await txRepo.findOne({
+          where: { id: BigInt(existingSettlementId), type: TransactionType.SETTLEMENT },
+        });
+        if (!settlement) {
+          throw new Error('Liquidación no encontrada.');
+        }
+        if (resolveSettlementStatus(parseMetadata(settlement.metadata)) === 'COMPLETA') {
+          throw new Error('Una liquidación completa no se puede editar.');
+        }
+        if (settlement.producerId && settlement.producerId !== producerId) {
+          throw new Error('El productor de la liquidación no coincide.');
+        }
+      }
+
+      // Bloquea las filas de las recepciones para que dos liquidaciones simultáneas no las tomen a la vez.
+      const receptions = await txRepo.find({
+        where: {
+          id: In(receptionIds.map((id) => BigInt(id))),
+          type: TransactionType.RECEPTION,
+          producerId,
+          deletedAt: IsNull(),
+        },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (receptions.length !== receptionIds.length) {
+        throw new Error('Una o más recepciones no existen o no pertenecen al productor.');
+      }
+
+      const linksQb = relRepo
+        .createQueryBuilder('relation')
+        .where('relation.relationType = :type', { type: TransactionRelationType.RECEPTION_TO_SETTLEMENT })
+        .andWhere('relation.parentTransactionId IN (:...ids)', { ids: receptionIds });
+      if (existingSettlementId) {
+        linksQb.andWhere('relation.childTransactionId <> :settlementId', { settlementId: existingSettlementId });
+      }
+      if ((await linksQb.getCount()) > 0) {
+        throw new Error('Una o más recepciones ya están asociadas a otra liquidación.');
+      }
+
+      const advances = advanceIds.length > 0
+        ? await txRepo.find({
+            where: {
+              id: In(advanceIds.map((id) => BigInt(id))),
+              type: TransactionType.ADVANCE,
+              producerId,
+              deletedAt: IsNull(),
+            },
+            lock: { mode: 'pessimistic_write' },
+          })
+        : [];
+      if (advances.length !== advanceIds.length) {
+        throw new Error('Uno o más anticipos no existen o no pertenecen al productor.');
+      }
+
+      // Saldo disponible = monto - lo aplicado en OTRAS liquidaciones.
+      const appliedByOthers = new Map<string, number>();
+      if (advanceIds.length > 0) {
+        const rawQb = relRepo
+          .createQueryBuilder('relation')
+          .select('relation.parentTransactionId', 'advanceId')
+          .addSelect('relation.context', 'context')
+          .where('relation.relationType = :type', { type: TransactionRelationType.ADVANCE_TO_SETTLEMENT })
+          .andWhere('relation.parentTransactionId IN (:...ids)', { ids: advanceIds });
+        if (existingSettlementId) {
+          rawQb.andWhere('relation.childTransactionId <> :settlementId', { settlementId: existingSettlementId });
+        }
+        const rows = await rawQb.getRawMany<{ advanceId: string; context: string | null }>();
+        rows.forEach((row) => {
+          const amount = parseAdvanceRelationAmount(row.context);
+          const advance = advances.find((a) => String(a.id) === String(row.advanceId));
+          const applied = amount > 0 ? amount : Number(advance?.amount ?? 0);
+          appliedByOthers.set(String(row.advanceId), (appliedByOthers.get(String(row.advanceId)) ?? 0) + applied);
+        });
+      }
+
+      const advanceApplications: Array<{ transactionId: string; amount: number }> = [];
+      for (const advance of advances) {
+        const id = String(advance.id);
+        const available = Math.max(Math.round(toNumber(advance.amount, 0)) - (appliedByOthers.get(id) ?? 0), 0);
+        if (available <= 0) {
+          throw new Error(`El anticipo ${id} no tiene saldo disponible.`);
+        }
+        advanceApplications.push({ transactionId: id, amount: available });
+      }
+
+      const unpricedReceptions = receptions.filter((r) => !(receptionClpAmount(r) > 0));
+      if (status === 'COMPLETA' && unpricedReceptions.length > 0) {
+        const folios = unpricedReceptions.map((r) => String(r.id)).join(', ');
+        throw new Error(
+          `Hay ${unpricedReceptions.length} recepción(es) sin precio (folios: ${folios}). Asigne el precio o guarde la liquidación como borrador.`,
+        );
+      }
+
+      const receptionsTotalCLP = receptions.reduce((sum, r) => sum + receptionClpAmount(r), 0);
+      const advancesAppliedCLP = advanceApplications.reduce((sum, a) => sum + a.amount, 0);
+      if (advancesAppliedCLP > receptionsTotalCLP) {
+        throw new Error('Los anticipos seleccionados superan el total de las recepciones.');
+      }
+      const netAmountCLP = receptionsTotalCLP - advancesAppliedCLP;
+
+      const paymentMethod = input.paymentMethod;
+      if (status === 'COMPLETA' && netAmountCLP > 0) {
+        if (paymentMethod !== 'CASH' && paymentMethod !== 'TRANSFER' && paymentMethod !== 'CHECK') {
+          throw new Error('Debe indicar la forma de pago de la liquidación.');
+        }
+      }
+      const bankAccountId = input.paymentDetails?.bankAccountId;
+      if (bankAccountId) {
+        const bankAccount = await manager.getRepository(AdminBankAccount).findOne({ where: { id: bankAccountId } });
+        if (!bankAccount || !bankAccount.isActive) {
+          throw new Error('La cuenta bancaria de la administración seleccionada no está activa.');
+        }
+      }
+
+      const metadata: SettlementMetadata = {
+        selectedReceptionIds: receptionIds,
+        selectedAdvanceIds: advanceIds,
+        paymentMethod,
+        paymentDetails: input.paymentDetails,
+        totals: {
+          receptionsCount: receptionIds.length,
+          receptionsTotal: receptionsTotalCLP,
+          advancesCount: advanceIds.length,
+          advancesTotal: advancesAppliedCLP,
+          balance: netAmountCLP,
+        },
+        notes: input.notes,
+        isDraft: status === 'BORRADOR',
+        status,
+        advanceApplications,
+        receptionsTotalCLP,
+        advancesAppliedCLP,
+        netAmountCLP,
+      };
+
+      const previousMetadata = settlement ? parseMetadata(settlement.metadata) : null;
+      const previousAmount = settlement ? Number(settlement.amount) : undefined;
+
+      if (!settlement) {
+        settlement = txRepo.create({
+          type: TransactionType.SETTLEMENT,
+          direction: TransactionDirection.OUT,
+          unit: TransactionUnit.CLP,
+          amount: netAmountCLP,
+          producerId,
+          seasonId,
+          userId,
+          metadata,
+        });
+      } else {
+        settlement.amount = netAmountCLP;
+        settlement.seasonId = seasonId;
+        settlement.metadata = metadata;
+      }
+      await txRepo.save(settlement);
+      const settlementIdStr = String(settlement.id);
+
+      await relRepo.delete({
+        childTransactionId: settlementIdStr,
+        relationType: In([TransactionRelationType.RECEPTION_TO_SETTLEMENT, TransactionRelationType.ADVANCE_TO_SETTLEMENT]),
+      });
+
+      await relRepo.save([
+        ...receptionIds.map((receptionId) =>
+          relRepo.create({
+            parentTransactionId: receptionId,
+            childTransactionId: settlementIdStr,
+            relationType: TransactionRelationType.RECEPTION_TO_SETTLEMENT,
+            context: JSON.stringify({ source: 'saveSettlement' }),
+          }),
+        ),
+        ...advanceApplications.map((application) =>
+          relRepo.create({
+            parentTransactionId: application.transactionId,
+            childTransactionId: settlementIdStr,
+            relationType: TransactionRelationType.ADVANCE_TO_SETTLEMENT,
+            context: JSON.stringify({ amount: application.amount, source: 'saveSettlement' }),
+          }),
+        ),
+      ]);
+
+      await logTransactionAudit(
+        manager,
+        settlementIdStr,
+        existingSettlementId ? AuditActionType.UPDATE : AuditActionType.CREATE,
+        userId,
+        existingSettlementId
+          ? {
+              amount: previousAmount,
+              receptionsCount: previousMetadata?.totals?.receptionsCount ?? 0,
+              advancesCount: previousMetadata?.totals?.advancesCount ?? 0,
+              paymentMethod: previousMetadata?.paymentMethod,
+              status: resolveSettlementStatus(previousMetadata),
+            }
+          : undefined,
+        {
+          type: TransactionType.SETTLEMENT,
+          producerId,
+          seasonId,
+          amount: netAmountCLP,
+          receptionsCount: receptionIds.length,
+          advancesCount: advanceIds.length,
+          paymentMethod,
+          status,
+        },
+      );
+
+      return settlementIdStr;
+    });
+
+    revalidatePath('/home/economicManagement/settlements');
+    return { success: true, settlementId };
+  } catch (error: any) {
+    console.error('[saveSettlement]', error);
+    return { success: false, error: error?.message || 'Error al guardar la liquidación.' };
   }
+}
 
-  const transactionRepo = db.getRepository(Transaction);
-  const relationRepo = db.getRepository(TransactionRelation);
+export async function createSettlement(input: CreateSettlementInput): Promise<SettlementActionResult> {
+  return saveSettlementCore(input);
+}
 
-  // Verificar recepciones
-  const receptions = await transactionRepo.find({
-    where: {
-      id: In(receptionIds.map(id => parseInt(id))),
-      type: TransactionType.RECEPTION,
-      producerId: input.producerId,
-    },
-  });
-
-  if (receptions.length !== receptionIds.length) {
-    throw new Error('Algunas recepciones no existen o no pertenecen al productor');
+export async function updateSettlement(
+  settlementId: string,
+  input: CreateSettlementInput,
+): Promise<SettlementActionResult> {
+  if (!settlementId?.trim()) {
+    return { success: false, error: 'Liquidación no especificada.' };
   }
-
-  // Verificar anticipos
-  const advances = await transactionRepo.find({
-    where: {
-      id: In(advanceIds.map(id => parseInt(id))),
-      type: TransactionType.ADVANCE,
-      producerId: input.producerId,
-    },
-  });
-
-  if (advances.length !== advanceIds.length) {
-    throw new Error('Algunos anticipos no existen o no pertenecen al productor');
-  }
-
-  // Verificar que no estén ya liquidados
-  const existingRelations = await relationRepo.find({
-    where: [
-      {
-        childTransactionId: In([...receptionIds.map(id => parseInt(id)), ...advanceIds.map(id => parseInt(id))]),
-        relationType: TransactionRelationType.RECEPTION_TO_SETTLEMENT,
-      },
-      {
-        childTransactionId: In([...receptionIds.map(id => parseInt(id)), ...advanceIds.map(id => parseInt(id))]),
-        relationType: TransactionRelationType.ADVANCE_TO_SETTLEMENT,
-      },
-    ],
-  });
-
-  if (existingRelations.length > 0) {
-    throw new Error('Algunas recepciones o anticipos ya están liquidados');
-  }
-
-  // Crear la transacción de liquidación
-  const settlementMetadata: SettlementMetadata = {
-    selectedReceptionIds: input.selectedReceptionIds,
-    selectedAdvanceIds: input.selectedAdvanceIds,
-    paymentMethod: input.paymentMethod,
-    paymentDetails: input.paymentDetails,
-    totals: input.totals,
-    notes: input.notes,
-    isDraft: input.isDraft,
-  };
-
-  const settlement = await transactionRepo.save({
-    type: TransactionType.SETTLEMENT,
-    direction: TransactionDirection.OUT,
-    amount: input.totals.balance,
-    unit: TransactionUnit.CLP,
-    producerId: input.producerId,
-    seasonId: input.seasonId,
-    userId: input.userId,
-    metadata: settlementMetadata,
-  });
-
-  const settlementId = settlement.id.toString();
-
-  // Crear relaciones para recepciones
-  const receptionRelations = receptionIds.map(receptionId => ({
-    parentTransactionId: settlementId,
-    childTransactionId: receptionId,
-    relationType: TransactionRelationType.RECEPTION_TO_SETTLEMENT,
-  }));
-
-  // Crear relaciones para anticipos
-  const advanceRelations = advanceIds.map(advanceId => ({
-    parentTransactionId: settlementId,
-    childTransactionId: advanceId,
-    relationType: TransactionRelationType.ADVANCE_TO_SETTLEMENT,
-  }));
-
-  await relationRepo.save([...receptionRelations, ...advanceRelations]);
-
-  // Registrar auditoría de creación
-  await logTransactionAudit(
-    db.manager,
-    settlementId,
-    AuditActionType.CREATE,
-    input.userId,
-    undefined,
-    {
-      type: TransactionType.SETTLEMENT,
-      producerId: input.producerId,
-      seasonId: input.seasonId,
-      amount: input.totals.balance,
-      receptionsCount: input.totals.receptionsCount,
-      advancesCount: input.totals.advancesCount,
-      paymentMethod: input.paymentMethod,
-      isDraft: input.isDraft,
-    }
-  );
-
-  return { settlementId };
+  return saveSettlementCore(input, settlementId.trim());
 }
 
 export async function listSettlements(input: ListSettlementsInput): Promise<SettlementsResult> {
@@ -829,7 +1038,7 @@ export async function listSettlements(input: ListSettlementsInput): Promise<Sett
       amount: Number(settlement.amount),
       receptionsCount: metadata?.totals?.receptionsCount ?? 0,
       advancesCount: metadata?.totals?.advancesCount ?? 0,
-      status: metadata?.isDraft ? 'DRAFT' : 'COMPLETED',
+      status: resolveSettlementStatus(metadata) === 'BORRADOR' ? 'DRAFT' : 'COMPLETED',
     };
   });
 
@@ -884,7 +1093,6 @@ export async function getSettlementDetail(settlementId: string): Promise<Settlem
   const transactionRepo = db.getRepository(Transaction);
   const relationRepo = db.getRepository(TransactionRelation);
 
-  // Fix: Use BigInt for ID lookup
   const settlement = await transactionRepo.findOne({
     where: { id: BigInt(settlementId), type: TransactionType.SETTLEMENT },
     relations: ['producer', 'producer.person', 'season'],
@@ -894,40 +1102,43 @@ export async function getSettlementDetail(settlementId: string): Promise<Settlem
     throw new Error('Liquidación no encontrada');
   }
 
+  // La liquidación es el hijo de todas sus relaciones.
   const relations = await relationRepo.find({
-    where: { parentTransactionId: settlementId },
+    where: { childTransactionId: String(settlementId) },
   });
 
-  // Fix: Filter nulls and map to string
   const receptionIds = relations
-    .filter((r) => r.relationType === TransactionRelationType.RECEPTION_TO_SETTLEMENT && r.childTransactionId)
-    .map((r) => r.childTransactionId as string);
+    .filter((r) => r.relationType === TransactionRelationType.RECEPTION_TO_SETTLEMENT && r.parentTransactionId)
+    .map((r) => r.parentTransactionId as string);
 
-  const advanceIds = relations
-    .filter((r) => r.relationType === TransactionRelationType.ADVANCE_TO_SETTLEMENT && r.childTransactionId)
-    .map((r) => r.childTransactionId as string);
+  const appliedByAdvance = new Map<string, number>();
+  relations
+    .filter((r) => r.relationType === TransactionRelationType.ADVANCE_TO_SETTLEMENT && r.parentTransactionId)
+    .forEach((r) => {
+      const amount = parseAdvanceRelationAmount(r.context);
+      appliedByAdvance.set(String(r.parentTransactionId), amount);
+    });
+  const advanceIds = Array.from(appliedByAdvance.keys());
 
   const receptions = receptionIds.length > 0
     ? await transactionRepo.find({
-        where: { id: In(receptionIds.map(id => BigInt(id))) },
+        where: { id: In(receptionIds.map((id) => BigInt(id))) },
         relations: ['season'],
       })
     : [];
 
-  // Fetch packs for varieties and weight
   const receptionDetails: SettlementDetailReception[] = [];
   for (const reception of receptions) {
     const metadata = reception.metadata as any;
-    // Fix: Use correct column name receptionTransactionId and remove invalid relation
     const packs = await db.getRepository(ReceptionPack).find({
       where: { receptionTransactionId: String(reception.id) },
     });
-    
-    // Fix: Use varietyName directly from entity
+
     const varieties = Array.from(new Set(packs.map(p => p.varietyName).filter(Boolean) as string[]));
     const formats = Array.from(new Set(packs.map(p => p.formatName).filter(Boolean) as string[]));
     const netWeightKg = packs.reduce((sum, p) => sum + Number(p.netWeight), 0);
-    const price = netWeightKg > 0 ? Number(reception.amount) / netWeightKg : 0;
+    const totalPrice = receptionClpAmount(reception);
+    const price = netWeightKg > 0 ? totalPrice / netWeightKg : 0;
 
     receptionDetails.push({
       transactionId: String(reception.id),
@@ -937,7 +1148,7 @@ export async function getSettlementDetail(settlementId: string): Promise<Settlem
       formats,
       netWeightKg,
       price,
-      totalPrice: Number(reception.amount),
+      totalPrice,
     });
   }
 
@@ -949,10 +1160,12 @@ export async function getSettlementDetail(settlementId: string): Promise<Settlem
 
   const advanceDetails: SettlementDetailAdvance[] = advances.map((advance) => {
     const metadata = advance.metadata as AdvanceMetadata;
+    const applied = appliedByAdvance.get(String(advance.id)) ?? 0;
     return {
       transactionId: String(advance.id),
       createdAt: advance.createdAt.toISOString(),
-      amount: Number(advance.amount), // Assuming full amount for now as per createSettlement logic
+      // Monto efectivamente descontado en esta liquidación (no el monto total del anticipo).
+      amount: applied > 0 ? applied : Number(advance.amount),
       paymentMethod: typeof metadata?.paymentMethod === 'string' ? metadata.paymentMethod : 'CASH',
       notes: metadata?.notes ?? null,
     };
@@ -982,56 +1195,48 @@ export async function getSettlementDetail(settlementId: string): Promise<Settlem
 
 export async function deleteSettlement(settlementId: string) {
   const db = await getDb();
-  const queryRunner = db.createQueryRunner();
-
-  await queryRunner.connect();
-  await queryRunner.startTransaction();
 
   try {
-    const settlement = await queryRunner.manager.findOne(Transaction, {
-      where: { id: BigInt(settlementId), type: TransactionType.SETTLEMENT }
+    await db.transaction(async (manager) => {
+      const settlement = await manager.findOne(Transaction, {
+        where: { id: BigInt(settlementId), type: TransactionType.SETTLEMENT },
+      });
+
+      if (!settlement) {
+        throw new Error('Liquidación no encontrada');
+      }
+
+      // Libera recepciones y anticipos: la liquidación es el hijo de sus relaciones.
+      await manager.delete(TransactionRelation, {
+        childTransactionId: String(settlementId),
+        relationType: In([TransactionRelationType.RECEPTION_TO_SETTLEMENT, TransactionRelationType.ADVANCE_TO_SETTLEMENT]),
+      });
+
+      const settlementMetadata = settlement.metadata as SettlementMetadata | null;
+      await logTransactionAudit(
+        manager,
+        settlementId,
+        AuditActionType.DELETE,
+        settlement.userId || undefined,
+        {
+          type: TransactionType.SETTLEMENT,
+          producerId: settlement.producerId,
+          seasonId: settlement.seasonId,
+          amount: Number(settlement.amount),
+          receptionsCount: settlementMetadata?.totals?.receptionsCount || 0,
+          advancesCount: settlementMetadata?.totals?.advancesCount || 0,
+        },
+        undefined
+      );
+
+      await manager.remove(settlement);
     });
 
-    if (!settlement) {
-      throw new Error('Liquidación no encontrada');
-    }
-
-    // Delete relations where this settlement is the parent
-    await queryRunner.manager.delete(TransactionRelation, {
-      parentTransactionId: BigInt(settlementId)
-    });
-
-    // Registrar auditoría antes de eliminar
-    const settlementMetadata = settlement.metadata as SettlementMetadata | null;
-    await logTransactionAudit(
-      queryRunner.manager,
-      settlementId,
-      AuditActionType.DELETE,
-      settlement.userId || undefined,
-      {
-        type: TransactionType.SETTLEMENT,
-        producerId: settlement.producerId,
-        seasonId: settlement.seasonId,
-        amount: Number(settlement.amount),
-        receptionsCount: settlementMetadata?.totals?.receptionsCount || 0,
-        advancesCount: settlementMetadata?.totals?.advancesCount || 0,
-      },
-      undefined
-    );
-
-    // Delete the settlement transaction
-    await queryRunner.manager.remove(settlement);
-
-    await queryRunner.commitTransaction();
-    
     revalidatePath('/home/economicManagement/settlements');
     return { success: true };
-  } catch (error) {
-    await queryRunner.rollbackTransaction();
+  } catch (error: any) {
     console.error('Error deleting settlement:', error);
-    return { success: false, error: 'Error al eliminar la liquidación' };
-  } finally {
-    await queryRunner.release();
+    return { success: false, error: error?.message || 'Error al eliminar la liquidación' };
   }
 }
 
@@ -1051,27 +1256,19 @@ export async function getSettlementForEdit(settlementId: string) {
 
   const metadata = settlement.metadata as SettlementMetadata | null;
 
-  if (!metadata?.isDraft) {
+  if (resolveSettlementStatus(metadata) !== 'BORRADOR') {
     return null; // Solo se pueden editar liquidaciones en borrador
   }
 
-  // Get linked receptions
-  const receptionRelations = await relationRepo.find({
-    where: {
-      parentTransactionId: String(settlementId),
-      relationType: TransactionRelationType.RECEPTION_TO_SETTLEMENT,
-    },
+  const relations = await relationRepo.find({
+    where: { childTransactionId: String(settlementId) },
   });
-  const linkedReceptionIds = receptionRelations.map(r => String(r.childTransactionId));
-
-  // Get linked advances
-  const advanceRelations = await relationRepo.find({
-    where: {
-      parentTransactionId: String(settlementId),
-      relationType: TransactionRelationType.ADVANCE_TO_SETTLEMENT,
-    },
-  });
-  const linkedAdvanceIds = advanceRelations.map(r => String(r.childTransactionId));
+  const linkedReceptionIds = relations
+    .filter((r) => r.relationType === TransactionRelationType.RECEPTION_TO_SETTLEMENT)
+    .map((r) => String(r.parentTransactionId));
+  const linkedAdvanceIds = relations
+    .filter((r) => r.relationType === TransactionRelationType.ADVANCE_TO_SETTLEMENT)
+    .map((r) => String(r.parentTransactionId));
 
   return {
     id: String(settlement.id),
@@ -1082,153 +1279,6 @@ export async function getSettlementForEdit(settlementId: string) {
     linkedReceptionIds,
     linkedAdvanceIds,
   };
-}
-
-export async function updateSettlement(settlementId: string, input: CreateSettlementInput) {
-  const db = await getDb();
-  const queryRunner = db.createQueryRunner();
-
-  await queryRunner.connect();
-  await queryRunner.startTransaction();
-
-  try {
-    const transactionRepo = queryRunner.manager.getRepository(Transaction);
-    const relationRepo = queryRunner.manager.getRepository(TransactionRelation);
-
-    const settlement = await transactionRepo.findOne({
-      where: { id: BigInt(settlementId), type: TransactionType.SETTLEMENT },
-    });
-
-    if (!settlement) {
-      throw new Error('Liquidación no encontrada');
-    }
-
-    // Validar que las recepciones y anticipos existan y pertenezcan al productor
-    const receptionIds = input.selectedReceptionIds;
-    const advanceIds = input.selectedAdvanceIds;
-
-    if (receptionIds.length === 0) {
-      throw new Error('Debe seleccionar al menos una recepción');
-    }
-
-    if (input.totals.balance < 0) {
-      throw new Error('El balance no puede ser negativo');
-    }
-
-    // Verificar recepciones
-    const receptions = await transactionRepo.find({
-      where: {
-        id: In(receptionIds.map(id => BigInt(id))),
-        type: TransactionType.RECEPTION,
-        producerId: input.producerId,
-      },
-    });
-
-    if (receptions.length !== receptionIds.length) {
-      throw new Error('Algunas recepciones no existen o no pertenecen al productor');
-    }
-
-    // Verificar anticipos
-    const advances = await transactionRepo.find({
-      where: {
-        id: In(advanceIds.map(id => BigInt(id))),
-        type: TransactionType.ADVANCE,
-        producerId: input.producerId,
-      },
-    });
-
-    if (advances.length !== advanceIds.length) {
-      throw new Error('Algunos anticipos no existen o no pertenecen al productor');
-    }
-
-    // Verificar que no estén ya liquidados por OTRA liquidación
-    const existingRelations = await relationRepo
-      .createQueryBuilder('relation')
-      .where('relation.childTransactionId IN (:...ids)', { ids: [...receptionIds, ...advanceIds].map(id => String(id)) })
-      .andWhere('relation.parentTransactionId != :settlementId', { settlementId: String(settlementId) })
-      .andWhere('relation.relationType IN (:...types)', { types: [TransactionRelationType.RECEPTION_TO_SETTLEMENT, TransactionRelationType.ADVANCE_TO_SETTLEMENT] })
-      .getMany();
-
-    if (existingRelations.length > 0) {
-      throw new Error('Algunas recepciones o anticipos ya están liquidados en otra liquidación');
-    }
-
-    // Actualizar metadata
-    const settlementMetadata: SettlementMetadata = {
-      selectedReceptionIds: input.selectedReceptionIds,
-      selectedAdvanceIds: input.selectedAdvanceIds,
-      paymentMethod: input.paymentMethod,
-      paymentDetails: input.paymentDetails,
-      totals: input.totals,
-      notes: input.notes,
-      isDraft: input.isDraft,
-    };
-
-    // Actualizar transacción
-    settlement.amount = input.totals.balance;
-    settlement.metadata = settlementMetadata;
-    
-    await transactionRepo.save(settlement);
-
-    // Actualizar relaciones
-    // Primero eliminamos todas las relaciones existentes de este settlement
-    await relationRepo.delete({
-      parentTransactionId: String(settlementId),
-      relationType: In([TransactionRelationType.RECEPTION_TO_SETTLEMENT, TransactionRelationType.ADVANCE_TO_SETTLEMENT]),
-    });
-
-    // Crear nuevas relaciones para recepciones
-    const receptionRelations = receptionIds.map(receptionId => ({
-      parentTransactionId: String(settlementId),
-      childTransactionId: String(receptionId),
-      relationType: TransactionRelationType.RECEPTION_TO_SETTLEMENT,
-    }));
-
-    // Crear nuevas relaciones para anticipos
-    const advanceRelations = advanceIds.map(advanceId => ({
-      parentTransactionId: String(settlementId),
-      childTransactionId: String(advanceId),
-      relationType: TransactionRelationType.ADVANCE_TO_SETTLEMENT,
-    }));
-
-    if (receptionRelations.length > 0 || advanceRelations.length > 0) {
-      await relationRepo.save([...receptionRelations, ...advanceRelations]);
-    }
-
-    // Registrar auditoría de actualización
-    const oldMetadata = settlement.metadata as SettlementMetadata | null;
-    await logTransactionAudit(
-      queryRunner.manager,
-      settlementId,
-      AuditActionType.UPDATE,
-      input.userId,
-      {
-        amount: Number(settlement.amount),
-        receptionsCount: oldMetadata?.totals?.receptionsCount || 0,
-        advancesCount: oldMetadata?.totals?.advancesCount || 0,
-        paymentMethod: oldMetadata?.paymentMethod,
-        isDraft: oldMetadata?.isDraft,
-      },
-      {
-        amount: input.totals.balance,
-        receptionsCount: input.totals.receptionsCount,
-        advancesCount: input.totals.advancesCount,
-        paymentMethod: input.paymentMethod,
-        isDraft: input.isDraft,
-      }
-    );
-
-    await queryRunner.commitTransaction();
-    revalidatePath('/home/economicManagement/settlements');
-    return { success: true };
-
-  } catch (error) {
-    await queryRunner.rollbackTransaction();
-    console.error('Error updating settlement:', error);
-    throw error;
-  } finally {
-    await queryRunner.release();
-  }
 }
 
 // ============================================================================
@@ -1288,7 +1338,7 @@ export async function updateSettlementDate(input: UpdateSettlementDateInput): Pr
 
     // Check if settlement is in draft status
     const metadata = settlement.metadata as SettlementMetadata | null;
-    if (!metadata?.isDraft) {
+    if (resolveSettlementStatus(metadata) !== 'BORRADOR') {
       return { success: false, error: 'Solo se puede modificar la fecha de liquidaciones en borrador.' };
     }
 

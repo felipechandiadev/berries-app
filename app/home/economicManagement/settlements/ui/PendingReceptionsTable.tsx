@@ -96,7 +96,12 @@ export default function PendingReceptionsTable({ rows, selectedIds, onToggle }: 
                     data-test-id="pending-reception-switch"
                   />
                 </td>
-                <td className="px-4 py-3 font-mono text-xs text-foreground">{row.transactionId}</td>
+                <td className="px-4 py-3 font-mono text-xs text-foreground">
+                  {row.transactionId}
+                  {row.isUnpriced && (
+                    <span className="ml-2 rounded bg-warning px-1.5 py-0.5 font-sans text-[10px] uppercase text-black">Sin precio</span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-sm font-medium text-foreground">
                   {formatAuditDate(row.createdAt)}
                 </td>

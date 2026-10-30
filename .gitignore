@@ -35,3 +35,6 @@ cookies.txt
 # vercel / turbo
 .vercel
 .turbo
+
+# database backups (contain real data)
+backups/
