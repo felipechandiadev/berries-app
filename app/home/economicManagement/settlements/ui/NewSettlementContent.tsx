@@ -31,13 +31,8 @@ interface NewSettlementContentProps {
 const toIdSet = (ids: string[]): Set<string> => new Set(ids);
 
 const calculateReceptionTotal = (row: PendingReceptionRow): number => {
-  const clpPortion = Number.isFinite(row.totalToPayCLP) ? row.totalToPayCLP : 0;
-  const usdPortion = Number.isFinite(row.totalToPayUSD) ? row.totalToPayUSD : 0;
-  const rate = Number.isFinite(row.exchangeRate) ? row.exchangeRate : 0;
-  const fallback = Number.isFinite(row.totalCLPToPay) ? row.totalCLPToPay : 0;
-
-  const totalFromBreakdown = clpPortion + usdPortion * rate;
-  return totalFromBreakdown > 0 ? totalFromBreakdown : fallback;
+  // El servidor es la fuente de verdad (misma regla que usa al guardar la liquidación).
+  return Number.isFinite(row.totalCLPToPay) ? row.totalCLPToPay : 0;
 };
 
 export default function NewSettlementContent({
@@ -55,7 +50,7 @@ export default function NewSettlementContent({
       if (mode === 'edit' && initialData) {
         return new Set(initialData.linkedReceptionIds);
       }
-      return toIdSet(receptions.rows.map((row) => row.transactionId));
+      return toIdSet(receptions.rows.filter((row) => !row.isUnpriced).map((row) => row.transactionId));
     }
   );
   const [selectedAdvanceIds, setSelectedAdvanceIds] = useState<Set<string>>(
@@ -151,6 +146,13 @@ export default function NewSettlementContent({
       showError('El balance no puede ser negativo');
       return;
     }
+    if (!isDraft) {
+      const unpriced = receptionsData.rows.filter((row) => row.isUnpriced && selectedReceptionIds.has(row.transactionId));
+      if (unpriced.length > 0) {
+        showError(`Hay ${unpriced.length} recepción(es) sin precio seleccionadas. Desmárquelas, asigne el precio o guarde como borrador.`);
+        return;
+      }
+    }
 
     setIsSubmitting(true);
     try {
@@ -178,13 +180,15 @@ export default function NewSettlementContent({
         userId: currentUserId,
       };
 
-      if (mode === 'edit' && settlementId) {
-        await updateSettlement(settlementId, settlementData);
-        success('Liquidación actualizada exitosamente');
-      } else {
-        await createSettlement(settlementData);
-        success('Liquidación creada exitosamente');
+      const result = mode === 'edit' && settlementId
+        ? await updateSettlement(settlementId, settlementData)
+        : await createSettlement(settlementData);
+
+      if (!result.success) {
+        showError(result.error || 'Error al guardar la liquidación');
+        return;
       }
+      success(mode === 'edit' && settlementId ? 'Liquidación actualizada exitosamente' : 'Liquidación creada exitosamente');
       
       // Limpiar todos los datos y redirigir para limpiar el productor seleccionado
       setSelectedReceptionIds(new Set());
@@ -210,7 +214,8 @@ export default function NewSettlementContent({
 
   useEffect(() => {
     if (mode === 'create') {
-      setSelectedReceptionIds(toIdSet(receptionsData.rows.map((row) => row.transactionId)));
+      // Las recepciones sin precio no se preseleccionan: valen $0 y no se pueden confirmar.
+      setSelectedReceptionIds(toIdSet(receptionsData.rows.filter((row) => !row.isUnpriced).map((row) => row.transactionId)));
     }
   }, [mode, receptionIdSignature, receptionsData.rows]);
 

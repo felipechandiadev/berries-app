@@ -145,7 +145,13 @@ export interface SettlementMetadata {
     balance: number; // receptionsTotal - advancesTotal
   };
   notes?: string;
-  isDraft?: boolean; // Si se guarda como borrador
+  isDraft?: boolean; // Si se guarda como borrador (se mantiene por compatibilidad; ver `status`)
+  status?: 'BORRADOR' | 'COMPLETA';
+  /** Monto aplicado de cada anticipo (calculado en el servidor). */
+  advanceApplications?: Array<{ transactionId: string; amount: number }>;
+  receptionsTotalCLP?: number;
+  advancesAppliedCLP?: number;
+  netAmountCLP?: number;
 }
 
 export interface DispatchMetadata {

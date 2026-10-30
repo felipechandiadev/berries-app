@@ -1533,7 +1533,8 @@ const buildReceptionsBaseQuery = (dataSource: DataSource) =>
     .addSelect('tx.metadata', 'metadata')
     .addSelect(
       `(SELECT COUNT(1) FROM transaction_relations tr 
-        WHERE tr.childTransactionId = tx.id 
+        WHERE tr.parentTransactionId = tx.id 
+        AND tr.deletedAt IS NULL
         AND tr.relationType = '${TransactionRelationType.RECEPTION_TO_SETTLEMENT}') > 0`,
       'isSettled'
     )
@@ -1915,7 +1916,7 @@ export async function getReceptionDetail(receptionId: string): Promise<Reception
       .getRepository(TransactionRelation)
       .count({
         where: {
-          childTransactionId: String(reception.id),
+          parentTransactionId: String(reception.id),
           relationType: TransactionRelationType.RECEPTION_TO_SETTLEMENT,
         },
       });
@@ -2507,7 +2508,7 @@ export async function deleteReception(receptionId: string, auditUserId?: string)
       // Verificar si la recepción está liquidada
       const settlementRelation = await relationsRepo.findOne({
         where: {
-          childTransactionId: receptionId,
+          parentTransactionId: receptionId,
           relationType: TransactionRelationType.RECEPTION_TO_SETTLEMENT,
         },
       });

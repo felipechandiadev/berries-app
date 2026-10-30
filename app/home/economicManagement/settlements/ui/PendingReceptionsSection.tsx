@@ -61,6 +61,18 @@ export default function PendingReceptionsSection({
         </div>
       )}
 
+      {hasSelection && data.unpricedCount > 0 && (
+        <div
+          role="alert"
+          className="mt-2 rounded-lg border border-warning bg-muted/20 p-4 text-sm text-foreground"
+          data-test-id="unpriced-receptions-warning"
+        >
+          <strong>{data.unpricedCount} recepción(es) sin precio</strong> ({new Intl.NumberFormat('es-CL', { maximumFractionDigits: 1 }).format(data.unpricedKg)} kg sin valorizar).
+          Quedan sin seleccionar y valen $0. Asigne el precio por kilo desde el detalle de cada recepción antes de liquidarlas;
+          mientras tanto solo se pueden incluir en un borrador.
+        </div>
+      )}
+
       {hasSelection && hasRows && (
         <div className="mt-2 space-y-3">
           <PendingReceptionsTable rows={data.rows} selectedIds={selectedIds} onToggle={onToggle} />
