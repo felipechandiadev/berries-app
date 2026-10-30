@@ -20,6 +20,7 @@ import type { PersonBankAccount } from '@/data/entities/Person';
 
 import { AuditActionType } from '@/data/entities/audit.types';
 import { logAdvanceAudit } from './audit.advances';
+import { authorize, requireAbility } from '@/lib/serverAuth';
 
 export type AdvancePaymentMethod = 'CASH' | 'TRANSFER' | 'CHECK';
 
@@ -284,6 +285,7 @@ function formatProducerBankAccount(account: PersonBankAccount): string {
 }
 
 export async function getProducerBankAccounts(producerId: string): Promise<Array<{ id: string; label: string }>> {
+  await requireAbility('ADVANCES_MENU', 'ADVANCES_CREATE', 'SETTLEMENTS_MENU', 'SETTLEMENTS_CREATE', 'SETTLEMENTS_UPDATE');
   if (!producerId) {
     return [];
   }
@@ -304,7 +306,9 @@ export async function getProducerBankAccounts(producerId: string): Promise<Array
   });
 }
 
-export async function createAdvance(input: CreateAdvanceInput): Promise<AdvanceDetail> {
+export async function createAdvance(rawInput: CreateAdvanceInput): Promise<AdvanceDetail> {
+  const auth = await requireAbility('ADVANCES_CREATE');
+  const input: CreateAdvanceInput = { ...rawInput, userId: auth.userId };
   ensureIntegerCLP(input.amount);
 
   const db = await getDb();
@@ -382,6 +386,7 @@ export async function createAdvance(input: CreateAdvanceInput): Promise<AdvanceD
 }
 
 export async function listAdvances(filters: ListAdvancesFilters = {}): Promise<AdvanceSummary[]> {
+  await requireAbility('ADVANCES_MENU', 'ADVANCES_DETAIL', 'SETTLEMENTS_MENU');
   const db = await getDb();
   const transactionRepo = db.getRepository(Transaction);
 
@@ -545,7 +550,9 @@ export async function listAdvances(filters: ListAdvancesFilters = {}): Promise<A
   });
 }
 
-export async function deleteAdvance(input: DeleteAdvanceInput): Promise<void> {
+export async function deleteAdvance(rawInput: DeleteAdvanceInput): Promise<void> {
+  const auth = await requireAbility('ADVANCES_DELETE');
+  const input: DeleteAdvanceInput = { ...rawInput, userId: auth.userId };
   const db = await getDb();
 
 
@@ -624,7 +631,9 @@ export async function deleteAdvance(input: DeleteAdvanceInput): Promise<void> {
   revalidatePath('/home/economicManagement/advances');
 }
 
-export async function applyAdvance(input: ApplyAdvanceInput): Promise<AdvanceDetail> {
+export async function applyAdvance(rawInput: ApplyAdvanceInput): Promise<AdvanceDetail> {
+  const auth = await requireAbility('ADVANCES_CREATE', 'SETTLEMENTS_CREATE', 'SETTLEMENTS_UPDATE');
+  const input: ApplyAdvanceInput = { ...rawInput, userId: auth.userId };
   ensureIntegerCLP(input.amount);
 
   const db = await getDb();
@@ -723,6 +732,7 @@ export async function applyAdvance(input: ApplyAdvanceInput): Promise<AdvanceDet
 }
 
 export async function getAdvanceDetail(advanceId: string): Promise<AdvanceDetail> {
+  await requireAbility('ADVANCES_MENU', 'ADVANCES_DETAIL', 'ADVANCES_PRINT_RECEIPT');
   const db = await getDb();
   return loadAdvanceDetail(db, advanceId);
 }
@@ -747,7 +757,12 @@ export interface UpdateAdvanceDateResult {
  * Cannot update if the advance has been applied to a settlement.
  */
 export async function updateAdvanceDate(input: UpdateAdvanceDateInput): Promise<UpdateAdvanceDateResult> {
-  const { advanceId, newDate, userId } = input;
+  const auth = await authorize('ADVANCES_UPDATE_DATE');
+  if (!auth.ok) {
+    return { success: false, error: auth.error };
+  }
+  const userId = auth.userId;
+  const { advanceId, newDate } = input;
 
   if (!advanceId?.trim()) {
     return { success: false, error: 'ID del anticipo es requerido.' };

@@ -11,6 +11,7 @@ import { In, IsNull } from 'typeorm';
 import { revalidatePath } from 'next/cache';
 import { logTransactionAudit } from './transactions';
 import { logSettlementAudit } from './audit.settlements';
+import { authorize, requireAbility } from '@/lib/serverAuth';
 import { updateReceptionExchangeRate } from './receptions';
 import { AuditActionType } from '../../data/entities/audit.types';
 
@@ -204,6 +205,7 @@ const parseMetadata = (value: unknown): Record<string, any> | null => {
 export async function listPendingReceptions(
   input: ListPendingReceptionsInput,
 ): Promise<PendingReceptionsResult> {
+  await requireAbility('SETTLEMENTS_MENU', 'SETTLEMENTS_VIEW', 'SETTLEMENTS_CREATE', 'SETTLEMENTS_UPDATE', 'SETTLEMENTS_PRINT_DETAIL');
   const producerId = input.producerId?.trim();
   const page = Number.isFinite(input.page) ? Math.max(1, Math.floor(input.page as number)) : 1;
   const limitCandidate = Number.isFinite(input.limit) ? Math.max(1, Math.floor(input.limit as number)) : 25;
@@ -415,7 +417,12 @@ export async function bulkUpdatePendingReceptionExchangeRate(
   input: BulkUpdatePendingReceptionExchangeRateInput,
 ): Promise<BulkUpdatePendingReceptionExchangeRateResult> {
   try {
-    const { receptionIds, exchangeRate, reason, userId } = input;
+    const auth = await authorize('SETTLEMENTS_CREATE', 'SETTLEMENTS_UPDATE');
+    if (!auth.ok) {
+      return { success: false, updated: 0, error: auth.error };
+    }
+    const userId = auth.userId;
+    const { receptionIds, exchangeRate, reason } = input;
 
     if (!Array.isArray(receptionIds) || receptionIds.length === 0) {
       return {
@@ -521,6 +528,7 @@ const parseAdvanceRelationAmount = (context: string | null | undefined): number 
 export async function listPendingAdvances(
   input: ListPendingAdvancesInput,
 ): Promise<PendingAdvancesResult> {
+  await requireAbility('SETTLEMENTS_MENU', 'SETTLEMENTS_VIEW', 'SETTLEMENTS_CREATE', 'SETTLEMENTS_UPDATE', 'SETTLEMENTS_PRINT_DETAIL');
   const producerId = input.producerId?.trim();
   const page = Number.isFinite(input.page) ? Math.max(1, Math.floor(input.page as number)) : 1;
   const limitCandidate = Number.isFinite(input.limit) ? Math.max(1, Math.floor(input.limit as number)) : 25;
@@ -984,20 +992,29 @@ async function saveSettlementCore(
 }
 
 export async function createSettlement(input: CreateSettlementInput): Promise<SettlementActionResult> {
-  return saveSettlementCore(input);
+  const auth = await authorize('SETTLEMENTS_CREATE');
+  if (!auth.ok) {
+    return { success: false, error: auth.error };
+  }
+  return saveSettlementCore({ ...input, userId: auth.userId });
 }
 
 export async function updateSettlement(
   settlementId: string,
   input: CreateSettlementInput,
 ): Promise<SettlementActionResult> {
+  const auth = await authorize('SETTLEMENTS_UPDATE');
+  if (!auth.ok) {
+    return { success: false, error: auth.error };
+  }
   if (!settlementId?.trim()) {
     return { success: false, error: 'Liquidación no especificada.' };
   }
-  return saveSettlementCore(input, settlementId.trim());
+  return saveSettlementCore({ ...input, userId: auth.userId }, settlementId.trim());
 }
 
 export async function listSettlements(input: ListSettlementsInput): Promise<SettlementsResult> {
+  await requireAbility('SETTLEMENTS_MENU', 'SETTLEMENTS_VIEW', 'SETTLEMENTS_CREATE', 'SETTLEMENTS_UPDATE', 'SETTLEMENTS_PRINT_DETAIL');
   const producerId = input.producerId?.trim();
   const seasonId = input.seasonId?.trim();
   const page = Number.isFinite(input.page) ? Math.max(1, Math.floor(input.page as number)) : 1;
@@ -1089,6 +1106,7 @@ export interface SettlementDetail {
 }
 
 export async function getSettlementDetail(settlementId: string): Promise<SettlementDetail> {
+  await requireAbility('SETTLEMENTS_MENU', 'SETTLEMENTS_VIEW', 'SETTLEMENTS_CREATE', 'SETTLEMENTS_UPDATE', 'SETTLEMENTS_PRINT_DETAIL');
   const db = await getDb();
   const transactionRepo = db.getRepository(Transaction);
   const relationRepo = db.getRepository(TransactionRelation);
@@ -1194,6 +1212,7 @@ export async function getSettlementDetail(settlementId: string): Promise<Settlem
 }
 
 export async function deleteSettlement(settlementId: string) {
+  await requireAbility('SETTLEMENTS_DELETE');
   const db = await getDb();
 
   try {
@@ -1241,6 +1260,7 @@ export async function deleteSettlement(settlementId: string) {
 }
 
 export async function getSettlementForEdit(settlementId: string) {
+  await requireAbility('SETTLEMENTS_UPDATE');
   const db = await getDb();
   const transactionRepo = db.getRepository(Transaction);
   const relationRepo = db.getRepository(TransactionRelation);
@@ -1301,7 +1321,12 @@ export interface UpdateSettlementDateResult {
  * Can only update settlements that are in draft status.
  */
 export async function updateSettlementDate(input: UpdateSettlementDateInput): Promise<UpdateSettlementDateResult> {
-  const { settlementId, newDate, userId } = input;
+  const auth = await authorize('SETTLEMENTS_UPDATE_DATE');
+  if (!auth.ok) {
+    return { success: false, error: auth.error };
+  }
+  const userId = auth.userId;
+  const { settlementId, newDate } = input;
 
   if (!settlementId?.trim()) {
     return { success: false, error: 'ID de la liquidación es requerido.' };
