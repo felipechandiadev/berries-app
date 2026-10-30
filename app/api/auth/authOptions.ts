@@ -64,17 +64,7 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
-        console.log("Authorize called with credentials:", {
-          username: credentials?.username,
-          password: credentials?.password ? 'SET' : 'UNDEFINED',
-          allKeys: Object.keys(credentials || {}),
-        });
-        
         if (!credentials?.username || !credentials?.password) {
-          console.log("Missing credentials:", {
-            hasUsername: !!credentials?.username,
-            hasPassword: !!credentials?.password,
-          });
           // Log failed login attempt - no user found
           await logLoginAudit(credentials?.username || 'unknown', AuditActionType.LOGIN_FAILED, undefined, 'Credenciales incompletas');
           throw new Error("Credenciales incompletas");
@@ -83,12 +73,8 @@ export const authOptions: NextAuthOptions = {
         try {
           console.log("Connecting to DB...");
           const db = await getDb();
-          console.log("DB Connected. Searching user:", credentials.username);
           
           const userRepo = db.getRepository(User);
-          const count = await userRepo.count();
-          console.log(`Total users in DB: ${count}`);
-
           const user = await userRepo.findOne({ 
             where: { userName: credentials.username },
             relations: ['person']
@@ -102,10 +88,7 @@ export const authOptions: NextAuthOptions = {
           }
 
           console.log("User found. Verifying password...");
-          console.log("User pass hash:", user.pass);
-          console.log("Password provided:", credentials.password);
           const isValid = await bcrypt.compare(credentials.password, user.pass);
-          console.log("Password comparison result:", isValid);
 
           if (!isValid) {
             console.log("Invalid password");
@@ -255,7 +238,6 @@ export const authOptions: NextAuthOptions = {
   events: {
     async signOut({ token, session }) {
       // Registrar auditoría de logout
-      console.log('[signOut event] Token:', token);
       if (token?.userId) {
         try {
           const db = await getDb();

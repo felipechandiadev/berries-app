@@ -92,18 +92,18 @@ Crea un archivo `.env` en la raíz del proyecto con las siguientes variables:
 
 ```bash
 # Base de datos de producción (Aiven)
-DB_HOST=berries-a-felipe-6f5f.j.aivencloud.com
-DB_PORT=17139
-DB_USER=avnadmin
-DB_PASSWORD=AVNS_6bx-z8_xReMMKCvNrG9
-DB_NAME=defaultdb
+DB_HOST=tu-servidor-mysql
+DB_PORT=3306
+DB_USER=tu-usuario
+DB_PASSWORD=tu-contraseña
+DB_NAME=tu-base
 
 # Base de datos de test (misma que producción)
-DB_HOST_TEST=berries-a-felipe-6f5f.j.aivencloud.com
-DB_PORT_TEST=17139
-DB_USER_TEST=avnadmin
-DB_PASSWORD_TEST=AVNS_6bx-z8_xReMMKCvNrG9
-DB_NAME_TEST=defaultdb
+DB_HOST_TEST=tu-servidor-mysql
+DB_PORT_TEST=3306
+DB_USER_TEST=tu-usuario
+DB_PASSWORD_TEST=tu-contraseña
+DB_NAME_TEST=tu-base
 
 # NextAuth
 NEXTAUTH_SECRET=tu-secreto-aqui
