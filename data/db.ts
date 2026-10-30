@@ -113,106 +113,87 @@ const getDbConfig = () => {
   };
 };
 
-/**
- * Next HMR re-evalúa este módulo: sin globalThis se abren pools nuevos y
- * saturan MySQL (Too many connections) junto con Berries-Angeles.
- */
-type DbGlobal = {
-  __berriesAppTypeormDs?: DataSource;
-  __berriesAppTypeormInit?: Promise<DataSource>;
-  __berriesAppLastPing?: number;
-};
-
-const g = globalThis as typeof globalThis & DbGlobal;
+let globalDataSource: DataSource | null = null;
+let initializationPromise: Promise<DataSource> | null = null;
+let lastPingAt = 0;
 const PING_INTERVAL_MS = 30_000;
 
 export const getDb = async (retries: number = 0): Promise<DataSource> => {
-  const MAX_RETRIES = 5;
-  const RETRY_DELAY = Math.min(8000, 500 * Math.pow(2, retries));
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 1000 * Math.pow(2, retries);
 
   try {
-    if (g.__berriesAppTypeormDs?.isInitialized) {
-      const lastPing = g.__berriesAppLastPing ?? 0;
-      if (Date.now() - lastPing > PING_INTERVAL_MS) {
-        try {
-          await g.__berriesAppTypeormDs.query("SELECT 1");
-          g.__berriesAppLastPing = Date.now();
-        } catch (pingError: any) {
-          console.warn("[DB] Ping falló, re-inicializando...", pingError?.message);
-          try {
-            await g.__berriesAppTypeormDs.destroy();
-          } catch {
-            /* ignore */
-          }
-          g.__berriesAppTypeormDs = undefined;
-          g.__berriesAppTypeormInit = undefined;
-        }
-      }
-      if (g.__berriesAppTypeormDs?.isInitialized) {
-        return g.__berriesAppTypeormDs;
-      }
+    if (!globalDataSource) {
+      console.log("[DB] Creando nueva instancia de DataSource (singleton)...");
+      globalDataSource = new DataSource(getDbConfig());
     }
 
-    if (!g.__berriesAppTypeormInit) {
-      g.__berriesAppTypeormInit = (async () => {
-        if (!g.__berriesAppTypeormDs) {
-          console.log("[DB] DataSource singleton (globalThis)...");
-          g.__berriesAppTypeormDs = new DataSource(getDbConfig());
-        }
-        if (!g.__berriesAppTypeormDs.isInitialized) {
-          console.log("[DB] Inicializando DataSource...");
-          await g.__berriesAppTypeormDs.initialize();
-          g.__berriesAppLastPing = Date.now();
+    if (!globalDataSource.isInitialized) {
+      if (!initializationPromise) {
+        console.log("[DB] Inicializando DataSource...");
+        initializationPromise = globalDataSource.initialize().then((ds) => {
           console.log("[DB] ✅ DataSource inicializado correctamente");
+          lastPingAt = Date.now();
+          return ds;
+        }).catch((err) => {
+          initializationPromise = null;
+          throw err;
+        });
+      }
+      await initializationPromise;
+    } else if (Date.now() - lastPingAt > PING_INTERVAL_MS) {
+      try {
+        await globalDataSource.query("SELECT 1");
+        lastPingAt = Date.now();
+      } catch (pingError: any) {
+        console.warn("[DB] Conexión existente falló el ping, re-inicializando...", pingError?.message);
+        try {
+          initializationPromise = null;
+          await globalDataSource.destroy();
+          globalDataSource = new DataSource(getDbConfig());
+          initializationPromise = globalDataSource.initialize();
+          await initializationPromise;
+          lastPingAt = Date.now();
+          console.log("[DB] ✅ DataSource re-inicializado correctamente tras fallo de ping");
+        } catch (reinitError) {
+          console.error("[DB] Error crítico re-inicializando tras fallo de ping:", reinitError);
+          throw reinitError;
         }
-        return g.__berriesAppTypeormDs;
-      })().catch((err) => {
-        g.__berriesAppTypeormInit = undefined;
-        if (g.__berriesAppTypeormDs && !g.__berriesAppTypeormDs.isInitialized) {
-          g.__berriesAppTypeormDs = undefined;
-        }
-        throw err;
-      });
+      }
     }
 
-    return await g.__berriesAppTypeormInit;
+    return globalDataSource;
   } catch (error: any) {
     const errorCode = error?.code || error?.driverError?.code;
-    const msg = String(error?.message || "");
-    const tooMany =
-      errorCode === "ER_CON_COUNT_ERROR" || /too many connections/i.test(msg);
     const isConnectionError =
       errorCode === "ECONNRESET" ||
       errorCode === "ENOTFOUND" ||
       errorCode === "ETIMEDOUT" ||
       errorCode === "PROTOCOL_CONNECTION_LOST" ||
-      tooMany;
+      errorCode === "ER_CON_COUNT_ERROR" ||
+      error?.message?.includes("too many connections");
 
-    if (!isConnectionError || retries >= MAX_RETRIES) {
-      throw error;
-    }
+    if (isConnectionError && retries < MAX_RETRIES) {
+      console.warn(
+        `[DB] Error de conexión: ${errorCode}. Reintentando en ${RETRY_DELAY}ms... (Intento ${retries + 1}/${MAX_RETRIES})`
+      );
 
-    console.warn(
-      `[DB] Error de conexión: ${errorCode}. Reintentando en ${RETRY_DELAY}ms... (Intento ${retries + 1}/${MAX_RETRIES})`
-    );
-    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
 
-    // Too many connections: esperar, no destruir (empeora el leak)
-    if (tooMany) {
-      g.__berriesAppTypeormInit = undefined;
+      if (globalDataSource?.isInitialized) {
+        try {
+          await globalDataSource.destroy();
+          console.log("[DB] Conexión destruida después del error");
+        } catch (destroyError) {
+          console.warn("[DB] Error al destruir conexión:", destroyError);
+        }
+      }
+
+      globalDataSource = null;
       return getDb(retries + 1);
     }
 
-    if (g.__berriesAppTypeormDs?.isInitialized) {
-      try {
-        await g.__berriesAppTypeormDs.destroy();
-      } catch (destroyError) {
-        console.warn("[DB] Error al destruir conexión:", destroyError);
-      }
-    }
-    g.__berriesAppTypeormDs = undefined;
-    g.__berriesAppTypeormInit = undefined;
-    return getDb(retries + 1);
+    throw error;
   }
 };
 
@@ -220,10 +201,9 @@ export const getDb = async (retries: number = 0): Promise<DataSource> => {
  * Limpia la conexión (útil para testing o shutdown)
  */
 export const closeDb = async (): Promise<void> => {
-  g.__berriesAppTypeormInit = undefined;
-  if (g.__berriesAppTypeormDs?.isInitialized) {
-    await g.__berriesAppTypeormDs.destroy();
+  if (globalDataSource?.isInitialized) {
+    await globalDataSource.destroy();
+    globalDataSource = null;
     console.log("[DB] Conexión cerrada");
   }
-  g.__berriesAppTypeormDs = undefined;
 };
