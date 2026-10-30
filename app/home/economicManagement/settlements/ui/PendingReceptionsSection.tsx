@@ -4,11 +4,16 @@ import type { Option } from '@/app/baseComponents/AutoComplete/AutoComplete';
 import type { PendingReceptionsResult } from '@/app/actions/settlements';
 import PendingReceptionsFilters from './PendingReceptionsFilters';
 import PendingReceptionsTable from './PendingReceptionsTable';
+import MonthFilter from './MonthFilter';
+import { MONTH_FILTER_ALL, type MonthFilterOption } from '@/lib/monthFilter';
 
 interface PendingReceptionsSectionProps {
   producerOptions: Option[];
   selectedProducerId?: string;
   data: PendingReceptionsResult;
+  monthOptions: MonthFilterOption[];
+  monthFilter: string;
+  onMonthChange: (value: string) => void;
   selectedIds: Set<string>;
   onToggle: (id: string, checked: boolean) => void;
   producerDisabled?: boolean;
@@ -23,6 +28,9 @@ export default function PendingReceptionsSection({
   producerOptions,
   selectedProducerId,
   data,
+  monthOptions,
+  monthFilter,
+  onMonthChange,
   selectedIds,
   onToggle,
   producerDisabled = false,
@@ -49,6 +57,15 @@ export default function PendingReceptionsSection({
         bulkExchangeRateLoading={bulkExchangeRateLoading}
       />
 
+      {hasSelection && (
+        <MonthFilter
+          options={monthOptions}
+          value={monthFilter}
+          onChange={onMonthChange}
+          data-test-id="receptions-month-filter"
+        />
+      )}
+
       {!hasSelection && (
         <div className={`${emptyStateClass} mt-2`}>
           Selecciona un productor para revisar las recepciones pendientes de liquidación.
@@ -57,7 +74,7 @@ export default function PendingReceptionsSection({
 
       {hasSelection && !hasRows && (
         <div className={`${emptyStateClass} mt-2`}>
-          No se encontraron recepciones pendientes para este productor.
+          No se encontraron recepciones pendientes para este productor{monthFilter === MONTH_FILTER_ALL ? '' : ' en el mes seleccionado'}.
         </div>
       )}
 

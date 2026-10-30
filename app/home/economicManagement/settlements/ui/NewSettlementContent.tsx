@@ -17,6 +17,12 @@ import PendingReceptionsSection from './PendingReceptionsSection';
 import PendingAdvancesSection from './PendingAdvancesSection';
 import SettlementSummary from './SettlementSummary';
 import SettlementPaymentSection, { type PaymentData } from './SettlementPaymentSection';
+import {
+  MONTH_FILTER_ALL,
+  buildMonthFilterOptions,
+  getRecentMonthKeys,
+  matchesMonthFilter,
+} from '@/lib/monthFilter';
 
 interface NewSettlementContentProps {
   producerOptions: Option[];
@@ -91,6 +97,8 @@ export default function NewSettlementContent({
     }
     return false;
   });
+  const [receptionMonth, setReceptionMonth] = useState<string>(MONTH_FILTER_ALL);
+  const [advanceMonth, setAdvanceMonth] = useState<string>(MONTH_FILTER_ALL);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeSeason, setActiveSeason] = useState<{ id: string; name: string } | null>(null);
   const [isBulkExchangeDialogOpen, setIsBulkExchangeDialogOpen] = useState(false);
@@ -121,9 +129,35 @@ export default function NewSettlementContent({
     setReceptionsData(receptions);
   }, [receptions]);
 
+  const recentMonthKeys = useMemo(() => getRecentMonthKeys(), []);
+  const receptionMonthOptions = useMemo(
+    () => buildMonthFilterOptions(receptionsData.rows, recentMonthKeys),
+    [receptionsData.rows, recentMonthKeys],
+  );
+  const advanceMonthOptions = useMemo(
+    () => buildMonthFilterOptions(advances.rows, recentMonthKeys),
+    [advances.rows, recentMonthKeys],
+  );
+
+  const filteredReceptions = useMemo<PendingReceptionsResult>(() => {
+    const rows = receptionsData.rows.filter((row) => matchesMonthFilter(row.createdAt, receptionMonth, recentMonthKeys));
+    const unpriced = rows.filter((row) => row.isUnpriced);
+    return {
+      ...receptionsData,
+      rows,
+      unpricedCount: unpriced.length,
+      unpricedKg: unpriced.reduce((total, row) => total + row.netWeightKg, 0),
+    };
+  }, [receptionsData, receptionMonth, recentMonthKeys]);
+
+  const filteredAdvances = useMemo<PendingAdvancesResult>(() => ({
+    ...advances,
+    rows: advances.rows.filter((row) => matchesMonthFilter(row.createdAt, advanceMonth, recentMonthKeys)),
+  }), [advances, advanceMonth, recentMonthKeys]);
+
   const receptionIdSignature = useMemo(() => {
-    return receptionsData.rows.map((row) => row.transactionId).join('|');
-  }, [receptionsData.rows]);
+    return filteredReceptions.rows.map((row) => row.transactionId).join('|');
+  }, [filteredReceptions.rows]);
 
   const handleSubmit = async () => {
     if (!selectedProducerId) {
@@ -215,29 +249,38 @@ export default function NewSettlementContent({
   useEffect(() => {
     if (mode === 'create') {
       // Las recepciones sin precio no se preseleccionan: valen $0 y no se pueden confirmar.
-      setSelectedReceptionIds(toIdSet(receptionsData.rows.filter((row) => !row.isUnpriced).map((row) => row.transactionId)));
+      setSelectedReceptionIds(toIdSet(filteredReceptions.rows.filter((row) => !row.isUnpriced).map((row) => row.transactionId)));
     }
-  }, [mode, receptionIdSignature, receptionsData.rows]);
+  }, [mode, receptionIdSignature, filteredReceptions.rows]);
 
   useEffect(() => {
     setSelectedReceptionIds((prev) => {
       if (prev.size === 0) {
         return prev;
       }
-      const available = new Set(receptionsData.rows.map((row) => row.transactionId));
+      const available = new Set(filteredReceptions.rows.map((row) => row.transactionId));
       const filtered = Array.from(prev).filter((id) => available.has(id));
       if (filtered.length === prev.size) {
         return prev;
       }
       return new Set(filtered);
     });
-  }, [receptionIdSignature, receptionsData.rows]);
+  }, [receptionIdSignature, filteredReceptions.rows]);
 
   useEffect(() => {
     if (mode === 'create') {
-      setSelectedAdvanceIds(toIdSet(advances.rows.map((row) => row.transactionId)));
+      setSelectedAdvanceIds(toIdSet(filteredAdvances.rows.map((row) => row.transactionId)));
     }
-  }, [advances.rows, mode]);
+  }, [filteredAdvances.rows, mode]);
+
+  // Lo que queda fuera del mes filtrado no puede seguir seleccionado (ni sumar en el resumen).
+  useEffect(() => {
+    setSelectedAdvanceIds((prev) => {
+      const available = new Set(filteredAdvances.rows.map((row) => row.transactionId));
+      const kept = Array.from(prev).filter((id) => available.has(id));
+      return kept.length === prev.size ? prev : new Set(kept);
+    });
+  }, [filteredAdvances.rows]);
 
   const handleReceptionToggle = (id: string, checked: boolean) => {
     setSelectedReceptionIds((prev) => {
@@ -404,8 +447,8 @@ export default function NewSettlementContent({
     advancesTotal,
     balance,
   } = useMemo(() => {
-    const selectedReceptions = receptionsData.rows.filter((row) => selectedReceptionIds.has(row.transactionId));
-    const selectedAdvances = advances.rows.filter((row) => selectedAdvanceIds.has(row.transactionId));
+    const selectedReceptions = filteredReceptions.rows.filter((row) => selectedReceptionIds.has(row.transactionId));
+    const selectedAdvances = filteredAdvances.rows.filter((row) => selectedAdvanceIds.has(row.transactionId));
 
     const receptionsTotalAmount = selectedReceptions.reduce((total, row) => total + calculateReceptionTotal(row), 0);
     const advancesTotalAmount = selectedAdvances.reduce((total, row) => total + row.availableAmount, 0);
@@ -417,7 +460,7 @@ export default function NewSettlementContent({
       advancesTotal: advancesTotalAmount,
       balance: receptionsTotalAmount - advancesTotalAmount,
     };
-  }, [advances.rows, receptionsData.rows, selectedAdvanceIds, selectedReceptionIds]);
+  }, [filteredAdvances.rows, filteredReceptions.rows, selectedAdvanceIds, selectedReceptionIds]);
 
   return (
     <>
@@ -425,7 +468,10 @@ export default function NewSettlementContent({
         <PendingReceptionsSection
           producerOptions={producerOptions}
           selectedProducerId={selectedProducerId}
-          data={receptionsData}
+          data={filteredReceptions}
+          monthOptions={receptionMonthOptions}
+          monthFilter={receptionMonth}
+          onMonthChange={setReceptionMonth}
           selectedIds={selectedReceptionIds}
           onToggle={handleReceptionToggle}
           producerDisabled={mode === 'edit'}
@@ -437,7 +483,10 @@ export default function NewSettlementContent({
         <div className="grid gap-6 lg:grid-cols-2">
           <PendingAdvancesSection
             selectedProducerId={selectedProducerId}
-            data={advances}
+            data={filteredAdvances}
+            monthOptions={advanceMonthOptions}
+            monthFilter={advanceMonth}
+            onMonthChange={setAdvanceMonth}
             selectedIds={selectedAdvanceIds}
             onToggle={handleAdvanceToggle}
           />
