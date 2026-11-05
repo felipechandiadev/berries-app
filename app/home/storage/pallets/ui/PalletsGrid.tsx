@@ -269,7 +269,7 @@ export default function PalletsGrid({
         headerName: '',
         flex: 1.2,
         sortable: false,
-        actionComponent: ({ row }: { row: PalletRow }) => {
+        renderCell: ({ row }: { row: PalletRow }) => {
           const isDispatched = row.status === PalletStatus.DISPATCHED;
           
           return (

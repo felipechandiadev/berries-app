@@ -24,6 +24,7 @@ export type ReceptionTransactionUnit = 'TRAY' | 'PALLET' | 'KG' | 'CLP' | 'USD';
 
 export interface ReceptionDetailSummary {
   id: string;
+  folio?: number | null;
   guideNumber?: string | null;
   producerName?: string | null;
   driver?: string | null;

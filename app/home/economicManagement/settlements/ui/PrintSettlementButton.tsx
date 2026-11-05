@@ -102,7 +102,7 @@ export default function PrintSettlementButton({ settlementId }: PrintSettlementB
         >
                     <div className="flex flex-col gap-4 p-1">
             <div className="border-b border-gray-200 pb-0.5 flex justify-between items-center">
-              <h2 className="text-lg font-bold text-gray-900">Liquidación #{detail.transactionId}</h2>
+              <h2 className="text-lg font-bold text-gray-900">Liquidación #{detail.folio ?? detail.transactionId}</h2>
               <p className="text-sm text-gray-500">{formatAuditDate(detail.createdAt)}</p>
             </div>
 

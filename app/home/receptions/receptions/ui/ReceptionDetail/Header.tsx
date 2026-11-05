@@ -31,7 +31,7 @@ export function ReceptionDetailHeader({ summary, totals, data, onClose }: Recept
     <header className="flex flex-col gap-4 px-6 py-4 border-b border-gray-200 bg-white">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-1">
-          <h2 className="text-xl font-semibold text-gray-900">Recepción #{summary.id}</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Recepción #{summary.folio ?? summary.id}</h2>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outlined" onClick={onClose}>

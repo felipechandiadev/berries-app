@@ -75,7 +75,7 @@ export default function PrintButton({ advanceId }: PrintButtonProps) {
             <section className="flex flex-col gap-1 border-t border-dashed border-border pt-2">
               <div className="flex justify-between text-[10px] uppercase">
                 <span className="font-semibold">Anticipo</span>
-                <span>#{detail.transactionId}</span>
+                <span>#{detail.folio ?? detail.transactionId}</span>
               </div>
               <div className="flex justify-between text-[10px]">
                 <span>Fecha:</span>

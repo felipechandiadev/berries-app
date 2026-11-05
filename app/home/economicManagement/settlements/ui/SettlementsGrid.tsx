@@ -54,7 +54,7 @@ export default function SettlementsGrid({ rows }: SettlementsGridProps) {
   const columns = useMemo<DataGridColumn[]>(
     () => [
       {
-        field: 'transactionId',
+        field: 'folio',
         headerName: 'Folio',
         flex: 0.7,
         sortable: true,
@@ -130,7 +130,7 @@ export default function SettlementsGrid({ rows }: SettlementsGridProps) {
         flex: 0.8,
         sortable: false,
         filterable: false,
-        actionComponent: ({ row }) => (
+        renderCell: ({ row }) => (
           <div className="flex justify-end w-full gap-2">
             {row.status === 'DRAFT' && has('SETTLEMENTS_UPDATE_DATE') && (
               <EditSettlementDateButton
@@ -146,7 +146,7 @@ export default function SettlementsGrid({ rows }: SettlementsGridProps) {
               <PrintSettlementButton settlementId={row.id} />
             )}
             {has('SETTLEMENTS_DELETE') && (
-              <DeleteSettlementButton settlementId={row.id} folio={row.transactionId} />
+              <DeleteSettlementButton settlementId={row.id} folio={row.folio ?? row.transactionId} />
             )}
           </div>
         ),

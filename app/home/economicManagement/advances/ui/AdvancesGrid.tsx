@@ -68,7 +68,7 @@ const AdvancesGrid = ({ rows, onRefresh }: AdvancesGridProps) => {
   const columns = useMemo<DataGridColumn[]>(
     () => [
       {
-        field: 'transactionId',
+        field: 'folio',
         headerName: 'Folio',
         flex: 0.7,
         sortable: true,
@@ -138,7 +138,9 @@ const AdvancesGrid = ({ rows, onRefresh }: AdvancesGridProps) => {
         sortable: false,
         filterable: false,
         renderCell: ({ row }) => {
-          const isSettled = row.status === 'APPLIED';
+          // Igual que la regla del servidor (updateAdvanceDate): un anticipo con
+          // montos aplicados (total o parcialmente) no admite cambio de fecha.
+          const isSettled = row.status === 'APPLIED' || Number(row.appliedAmount) > 0;
           return (
             <div className="flex gap-1">
               {has('ADVANCES_UPDATE_DATE') && (

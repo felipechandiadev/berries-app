@@ -97,7 +97,7 @@ export default function DetailButton({ advanceId }: DetailButtonProps) {
         >
           <div className="flex flex-col gap-6">
             <div className="border-b border-gray-200 pb-4">
-              <h2 className="text-xl font-bold text-gray-900">Detalle del Anticipo #{detail.transactionId}</h2>
+              <h2 className="text-xl font-bold text-gray-900">Detalle del Anticipo #{detail.folio ?? detail.transactionId}</h2>
             </div>
 
             {/* Header Section with Key Info */}

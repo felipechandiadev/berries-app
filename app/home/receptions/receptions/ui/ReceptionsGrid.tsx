@@ -239,7 +239,7 @@ export default function ReceptionsGrid({
       ),
     },
     {
-      field: 'id',
+      field: 'folio',
       headerName: 'Folio',
       flex: 0.3,
       sortable: true,
@@ -375,7 +375,7 @@ export default function ReceptionsGrid({
       flex: 0.8,
       sortable: false,
       filterable: false,
-      actionComponent: ({ row }: { row: ReceptionGridRow }) => (
+      renderCell: ({ row }: { row: ReceptionGridRow }) => (
         <div className="flex gap-1">
           <DetailReceptionButton reception={row} />
           {has('RECEPTIONS_PRINT_DETAIL') && (

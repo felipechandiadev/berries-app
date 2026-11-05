@@ -1,6 +1,7 @@
 'use server';
 
 import { getDb } from '../../data/db';
+import { nextFolio } from '../../lib/folio';
 import { Transaction, TransactionType, TransactionDirection, TransactionUnit, AdvanceMetadata, SettlementMetadata } from '../../data/entities/Transaction';
 import { TransactionRelation, TransactionRelationType } from '../../data/entities/TransactionRelation';
 import { ReceptionPack } from '../../data/entities/ReceptionPack';
@@ -58,6 +59,7 @@ export interface ListPendingAdvancesInput {
 
 export interface PendingAdvanceRow {
   transactionId: string;
+  folio?: number;
   createdAt: string;
   seasonName: string | null;
   operatorName: string | null;
@@ -91,6 +93,7 @@ export interface ListSettlementsInput {
 export interface SettlementRow {
   id: string;
   transactionId: string;
+  folio: number | null;
   createdAt: string;
   producerName: string | null;
   seasonName: string | null;
@@ -614,6 +617,7 @@ export async function listPendingAdvances(
 
       return {
         transactionId,
+        folio: advance.folio ?? undefined,
         createdAt: advance.createdAt?.toISOString?.() ?? new Date().toISOString(),
         seasonName: advance.season?.name ?? null,
         operatorName: advance.user?.userName ?? null,
@@ -629,6 +633,7 @@ export async function listPendingAdvances(
       // Return safe defaults
       return {
         transactionId: String(advance.id),
+        folio: advance.folio ?? undefined,
         createdAt: new Date().toISOString(),
         seasonName: null,
         operatorName: null,
@@ -921,6 +926,7 @@ async function saveSettlementCore(
           seasonId,
           userId,
           metadata,
+          folio: await nextFolio(manager, TransactionType.SETTLEMENT),
         });
       } else {
         settlement.amount = netAmountCLP;
@@ -1049,6 +1055,7 @@ export async function listSettlements(input: ListSettlementsInput): Promise<Sett
     return {
       id: String(settlement.id),
       transactionId: String(settlement.id),
+      folio: settlement.folio ?? null,
       createdAt: settlement.createdAt.toISOString(),
       producerName: settlement.producer?.name ?? null,
       seasonName: settlement.season?.name ?? null,
@@ -1088,6 +1095,7 @@ export interface SettlementDetailAdvance {
 
 export interface SettlementDetail {
   transactionId: string;
+  folio: number | null;
   createdAt: string;
   producerName: string;
   producerDni: string;
@@ -1193,6 +1201,7 @@ export async function getSettlementDetail(settlementId: string): Promise<Settlem
 
   return {
     transactionId: String(settlement.id),
+    folio: settlement.folio ?? null,
     createdAt: settlement.createdAt.toISOString(),
     producerName: settlement.producer?.name ?? '',
     producerDni: settlement.producer?.dni ?? '',

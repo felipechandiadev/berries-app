@@ -81,7 +81,7 @@ export function AuditDataGrid({
       headerName: '',
       flex: 0.8,
       sortable: false,
-      actionComponent: ({ row }: { row: typeof rows[0] }) => {
+      renderCell: ({ row }: { row: typeof rows[0] }) => {
         const originalAudit = data.find(d => d.id === row.id);
         return originalAudit ? <AuditMoreButton audit={originalAudit} /> : null;
       },

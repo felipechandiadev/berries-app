@@ -7,6 +7,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
+  Index,
 } from 'typeorm';
 import { Season } from './Season';
 import { Producer } from './Producer';
@@ -223,6 +224,7 @@ export type TransactionMetadata =
   | PalletTrayTransferMetadata;
 
 @Entity('transactions')
+@Index('UQ_transactions_type_folio', ['type', 'folio'], { unique: true })
 export class Transaction {
   @PrimaryGeneratedColumn('increment', { type: 'bigint' })
   id!: bigint;
@@ -232,6 +234,11 @@ export class Transaction {
     enum: TransactionType,
   })
   type!: TransactionType;
+
+  // Folio correlativo por tipo de documento (ADVANCE, SETTLEMENT).
+  // Se asigna desde document_counters; el id autoincremental es global y no sirve como folio.
+  @Column({ type: 'int', nullable: true })
+  folio?: number | null;
 
   @ManyToOne(() => Season, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'seasonId' })

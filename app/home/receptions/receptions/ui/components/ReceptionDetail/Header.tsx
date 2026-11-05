@@ -41,7 +41,7 @@ export function ReceptionDetailHeader({ summary, totals, onClose, onRefresh, ref
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         <div className="space-y-1">
           <h2 className="text-xl font-semibold text-gray-900">
-            Recepción #{summary.id}
+            Recepción #{summary.folio ?? summary.id}
           </h2>
           <div className="text-sm text-gray-500 flex flex-wrap gap-x-4 gap-y-1">
             {summary.guideNumber && (

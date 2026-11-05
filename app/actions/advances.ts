@@ -4,6 +4,7 @@ import type { DataSource, EntityManager } from 'typeorm';
 import { In, IsNull } from 'typeorm';
 import { revalidatePath } from 'next/cache';
 import { getDb } from '@/data/db';
+import { nextFolio } from '@/lib/folio';
 import {
   Transaction,
   TransactionDirection,
@@ -39,6 +40,7 @@ export interface CreateAdvanceInput {
 export interface AdvanceSummary {
   id: string;
   transactionId: string;
+  folio?: number;
   producerId?: string;
   producerName?: string;
   producerDni?: string;
@@ -197,6 +199,7 @@ function buildAdvanceSummary(
   return {
     id: String(transaction.id),
     transactionId: String(transaction.id),
+    folio: transaction.folio ?? undefined,
     producerId: transaction.producerId,
     producerName: transaction.producer?.name,
     producerDni: transaction.producer?.dni,
@@ -361,6 +364,7 @@ export async function createAdvance(rawInput: CreateAdvanceInput): Promise<Advan
 
 
   await db.transaction(async (manager) => {
+    transaction.folio = await nextFolio(manager, TransactionType.ADVANCE);
     await manager.getRepository(Transaction).save(transaction);
     // Audit log for creation
     await logAdvanceAudit(

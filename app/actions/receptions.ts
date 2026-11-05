@@ -2,6 +2,7 @@
 
 import { DataSource, EntityManager, In, IsNull } from 'typeorm';
 import { getDb } from '../../data/db';
+import { nextFolio } from '../../lib/folio';
 import { Transaction, TransactionDirection, TransactionType, TransactionUnit, TransactionMetadata } from '../../data/entities/Transaction';
 import { ReceptionPack } from '../../data/entities/ReceptionPack';
 import { TransactionRelation, TransactionRelationType } from '../../data/entities/TransactionRelation';
@@ -331,6 +332,7 @@ export async function processReception(input: ProcessReceptionInput): Promise<Pr
 
       const receptionTransaction = manager.create(Transaction, {
         type: TransactionType.RECEPTION,
+        folio: await nextFolio(manager, TransactionType.RECEPTION),
         direction: TransactionDirection.OUT,
         unit: TransactionUnit.CLP,
         amount: Number(totalCLPToPay.toFixed(2)),
@@ -1348,6 +1350,7 @@ const RECEPTION_GRID_VALID_FIELDS = [
 
 const RECEPTION_GRID_SORT_FIELDS = [
   'id',
+  'folio',
   'producerName',
   'guideNumber',
   'varieties',
@@ -1401,6 +1404,7 @@ const NUMERIC_COLUMN_SQL_MAP: Record<string, string> = {
 
 const SORT_SQL_MAP: Record<string, string> = {
   id: 'tx.id',
+  folio: 'tx.folio',
   producerName: 'producerName',
   guideNumber: 'guideNumber',
   varieties: JSON_FIRST_VARIETY,
@@ -1462,6 +1466,7 @@ const toReceptionMetadata = (value: unknown) => {
 
 export interface ReceptionGridRow {
   id: string;
+  folio: number | null;
   producerName: string;
   guideNumber: string;
   varieties: string[];
@@ -1500,6 +1505,7 @@ export interface ReceptionsGridResponse {
 
 interface RawReceptionRow {
   id: string;
+  folio: number | null;
   producerName: string | null;
   guideNumber: string | null;
   totalTrays: string | number | null;
@@ -1520,6 +1526,7 @@ const buildReceptionsBaseQuery = (dataSource: DataSource) =>
     .createQueryBuilder('tx')
     .leftJoin('tx.producer', 'producer')
     .select('tx.id', 'id')
+    .addSelect('tx.folio', 'folio')
     .addSelect('tx.createdAt', 'createdAt')
     .addSelect(JSON_PRODUCER, 'producerName')
     .addSelect(JSON_GUIDE, 'guideNumber')
@@ -1571,6 +1578,7 @@ const formatReceptionRow = (raw: RawReceptionRow): ReceptionGridRow => {
 
   return {
     id: raw.id ? String(raw.id) : '',
+    folio: raw.folio != null ? Number(raw.folio) : null,
     producerName: raw.producerName || metadata?.producerName || '—',
     guideNumber: raw.guideNumber || metadata?.guideNumber || '—',
     varieties: uniqueVarieties,
@@ -1609,8 +1617,8 @@ export async function getReceptionsGridData(
 
       columnFilters.forEach((filter, index) => {
         const paramName = `colFilter${index}`;
-        if (filter.column === 'id') {
-          query.andWhere(`CAST(tx.id AS CHAR) LIKE :${paramName}`, {
+        if (filter.column === 'folio') {
+          query.andWhere(`CAST(tx.folio AS CHAR) LIKE :${paramName}`, {
             [paramName]: `%${filter.value}%`,
           });
           return;
@@ -1656,7 +1664,7 @@ export async function getReceptionsGridData(
     if (filters?.search?.trim()) {
       const normalizedSearch = `%${normalizeString(filters.search.trim())}%`;
       query.andWhere(
-        `(${normalizeSqlExpression(JSON_PRODUCER)} LIKE :search OR ${normalizeSqlExpression(JSON_GUIDE)} LIKE :search OR CAST(tx.id AS CHAR) LIKE :search OR ${normalizeSqlExpression('producer.dni')} LIKE :search)`,
+        `(${normalizeSqlExpression(JSON_PRODUCER)} LIKE :search OR ${normalizeSqlExpression(JSON_GUIDE)} LIKE :search OR CAST(tx.folio AS CHAR) LIKE :search OR ${normalizeSqlExpression('producer.dni')} LIKE :search)`,
         { search: normalizedSearch }
       );
     }
@@ -1717,8 +1725,8 @@ export async function getReceptionsExportData(filters?: ReceptionsGridFilters): 
       columnFilters.forEach((filter, index) => {
         const paramName = `exportFilter${index}`;
 
-        if (filter.column === 'id') {
-          query.andWhere(`CAST(tx.id AS CHAR) LIKE :${paramName}`, {
+        if (filter.column === 'folio') {
+          query.andWhere(`CAST(tx.folio AS CHAR) LIKE :${paramName}`, {
             [paramName]: `%${filter.value}%`,
           });
           return;
@@ -1764,7 +1772,7 @@ export async function getReceptionsExportData(filters?: ReceptionsGridFilters): 
     if (filters?.search?.trim()) {
       const normalizedSearch = `%${normalizeString(filters.search.trim())}%`;
       query.andWhere(
-        `(${normalizeSqlExpression(JSON_PRODUCER)} LIKE :search OR ${normalizeSqlExpression(JSON_GUIDE)} LIKE :search OR CAST(tx.id AS CHAR) LIKE :search OR ${normalizeSqlExpression('producer.dni')} LIKE :search)`,
+        `(${normalizeSqlExpression(JSON_PRODUCER)} LIKE :search OR ${normalizeSqlExpression(JSON_GUIDE)} LIKE :search OR CAST(tx.folio AS CHAR) LIKE :search OR ${normalizeSqlExpression('producer.dni')} LIKE :search)`,
         { search: normalizedSearch }
       );
     }
@@ -2214,6 +2222,7 @@ export async function getReceptionDetail(receptionId: string): Promise<Reception
     const detail: ReceptionDetailData = {
       summary: {
         id: String(reception.id),
+        folio: reception.folio != null ? Number(reception.folio) : null,
         guideNumber: metadata?.guideNumber ?? null,
         producerName: metadata?.producerName ?? reception.producer?.name ?? null,
         driver: metadata?.driver ?? null,

@@ -19,6 +19,7 @@ import { TransactionRelation } from "./entities/TransactionRelation";
 import { AdminBankAccount } from "./entities/AdminBankAccount";
 import { Permission } from "./entities/Permission";
 import { ProductiveUnit } from "./entities/ProductiveUnit";
+import { DocumentCounter } from "./entities/DocumentCounter";
 import { AuditSubscriber } from "./subscribers/AuditSubscriber";
 
 const parseBoolean = (value: string | undefined, fallback = false): boolean => {
@@ -91,6 +92,7 @@ const getDbConfig = () => {
       AdminBankAccount,
       Permission,
       ProductiveUnit,
+      DocumentCounter,
     ],
     subscribers: [AuditSubscriber],
     migrations: [],

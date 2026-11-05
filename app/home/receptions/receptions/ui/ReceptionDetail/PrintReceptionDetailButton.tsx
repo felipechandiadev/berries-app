@@ -272,7 +272,7 @@ export function PrintReceptionDetailButton({ data }: PrintReceptionDetailButtonP
       >
         <div className="flex flex-col gap-4 p-1">
           <div className="border-b border-gray-200 pb-0.5 flex justify-between items-center">
-            <h2 className="text-lg font-bold text-gray-900">Recepción #{data.summary.id}</h2>
+            <h2 className="text-lg font-bold text-gray-900">Recepción #{data.summary.folio ?? data.summary.id}</h2>
             <p className="text-sm text-gray-500">{formattedPrintedDate} {formattedPrintedTime}</p>
           </div>
 

@@ -431,6 +431,7 @@ export function exportProducersToExcel(
 
 export interface ReceptionExcelRow {
   id: string;
+  folio?: number | null;
   producerName: string;
   guideNumber: string;
   varieties: string;
@@ -452,6 +453,7 @@ export function formatReceptionsDataForExcel(receptionsData: any[]): ReceptionEx
 
     return {
       id: typeof reception.id === 'string' ? reception.id : String(reception.id ?? ''),
+      folio: reception.folio ?? null,
       producerName: reception.producerName || '-',
       guideNumber: reception.guideNumber || '-',
       varieties: varieties || '-',
@@ -483,7 +485,7 @@ export function createReceptionsWorkbook(data: ReceptionExcelRow[], options: Exc
   const workbook = XLSX.utils.book_new();
 
   const dataWithHeaders = data.map(row => ({
-    'ID': row.id,
+    'Folio': row.folio ?? row.id,
     'Productor': row.producerName,
     'Guía': row.guideNumber,
     'Variedades': row.varieties,
@@ -591,6 +593,7 @@ export function exportReceptionsToExcel(
 export interface AdvanceExcelRow {
   id: string;
   transactionId: string;
+  folio?: number | null;
   producerName: string;
   seasonName: string;
   paymentMethod: string;
@@ -617,7 +620,7 @@ const ADVANCE_STATUS_LABELS: Record<string, string> = {
 export function formatAdvancesDataForExcel(advancesData: any[]): AdvanceExcelRow[] {
   return advancesData.map((advance) => ({
     id: advance.id || '-',
-    transactionId: advance.transactionId || '-',
+    transactionId: (advance.folio ?? advance.transactionId) || '-',
     producerName: advance.producerName || '-',
     seasonName: advance.seasonName || '-',
     paymentMethod: PAYMENT_METHOD_LABELS[advance.paymentMethod] || advance.paymentMethod || '-',
@@ -644,7 +647,7 @@ export function createAdvancesWorkbook(data: AdvanceExcelRow[], options: ExcelEx
   const workbook = XLSX.utils.book_new();
 
   const dataWithHeaders = data.map(row => ({
-    'Folio': row.transactionId,
+    'Folio': row.folio ?? row.transactionId,
     'Productor': row.producerName,
     'Temporada': row.seasonName,
     'Método de Pago': row.paymentMethod,
@@ -744,6 +747,7 @@ export function exportAdvancesToExcel(
 export interface SettlementExcelRow {
   id: string;
   transactionId: string;
+  folio?: number | null;
   producerName: string;
   seasonName: string;
   receptionsCount: number;
@@ -761,7 +765,7 @@ const SETTLEMENT_STATUS_LABELS: Record<string, string> = {
 export function formatSettlementsDataForExcel(settlementsData: any[]): SettlementExcelRow[] {
   return settlementsData.map((settlement) => ({
     id: settlement.id || '-',
-    transactionId: settlement.transactionId || '-',
+    transactionId: (settlement.folio ?? settlement.transactionId) || '-',
     producerName: settlement.producerName || '-',
     seasonName: settlement.seasonName || '-',
     receptionsCount: Number(settlement.receptionsCount || 0),
@@ -786,7 +790,7 @@ export function createSettlementsWorkbook(data: SettlementExcelRow[], options: E
   const workbook = XLSX.utils.book_new();
 
   const dataWithHeaders = data.map(row => ({
-    'Folio': row.transactionId,
+    'Folio': row.folio ?? row.transactionId,
     'Productor': row.producerName,
     'Temporada': row.seasonName,
     'Recepciones': row.receptionsCount,

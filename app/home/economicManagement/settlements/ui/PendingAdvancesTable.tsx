@@ -67,7 +67,7 @@ export default function PendingAdvancesTable({ rows, selectedIds, onToggle }: Pe
                     data-test-id="pending-advance-switch"
                   />
                 </td>
-                <td className="px-4 py-3 font-mono text-xs text-foreground">{row.transactionId}</td>
+                <td className="px-4 py-3 font-mono text-xs text-foreground">{row.folio ?? row.transactionId}</td>
                 <td className="px-4 py-3 text-sm font-medium text-foreground">{formatAuditDate(row.createdAt)}</td>
                 <td className="px-4 py-3 text-sm text-foreground">{formatPaymentMethod(row.paymentMethod)}</td>
                 <td className="px-4 py-3 text-right text-sm font-semibold text-primary">
