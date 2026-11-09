@@ -179,7 +179,7 @@ export async function buildTrayDeliveryTicketEscPos(
   enc.align('center');
   enc.line('Comprobante de entrega de bandejas');
   enc.line('Conserve este documento');
-  enc.feed(3);
+  // cut() already feeds 3 lines before the cut command.
   enc.cut();
 
   return enc.encode();

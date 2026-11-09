@@ -32,6 +32,17 @@ const CP850_MAP: Record<string, number> = {
   '\u00B0': 0xf8, // °
 };
 
+/** Non-CP850 characters that have a readable ASCII equivalent. */
+const ASCII_FALLBACK: Record<string, string> = {
+  '—': '-', // — em dash (placeholder "—" in tickets)
+  '–': '-', // – en dash
+  '‘': "'", // ‘
+  '’': "'", // ’
+  '“': '"', // “
+  '”': '"', // ”
+  '…': '.', // …
+};
+
 export type EscPosAlign = 'left' | 'center' | 'right';
 
 export class EscPosEncoder {
@@ -148,7 +159,13 @@ function encodeCp850(input: string): Uint8Array {
       bytes.push(mapped);
       continue;
     }
-    // Fallback: strip combining / replace with ASCII approximation
+    // Typographic punctuation the UI uses (e.g. "—" placeholders): ASCII approximation.
+    const ascii = ASCII_FALLBACK[char];
+    if (ascii !== undefined) {
+      bytes.push(ascii.charCodeAt(0));
+      continue;
+    }
+    // Fallback: replace with "?"
     bytes.push(0x3f); // ?
   }
   return new Uint8Array(bytes);
