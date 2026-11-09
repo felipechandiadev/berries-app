@@ -23,9 +23,13 @@ function getUsb(): USB {
   return navigator.usb;
 }
 
-/** Prefer printer-class devices; empty filters still lets the user pick any USB device. */
+/**
+ * Printer-class devices (7) plus vendor-specific devices (255), which many cheap
+ * thermal printers use. Without 255 the browser chooser hides them entirely.
+ */
 const DEVICE_FILTERS: USBDeviceFilter[] = [
   { classCode: 7 }, // Printer class
+  { classCode: 255 }, // Vendor specific (common on generic 80mm thermal printers)
 ];
 
 export async function listPairedPrinters(): Promise<USBDevice[]> {
