@@ -237,8 +237,8 @@ export function useDispatchWithExistingPallets(): UseDispatchWithExistingPallets
     if (!selectedClientId) {
       return { success: false, error: 'Debes seleccionar un cliente' };
     }
-    if (!pricePerKgInput || parseInt(pricePerKgInput, 10) <= 0) {
-      return { success: false, error: 'El precio de venta debe ser mayor a 0' };
+    if (!selectedVarietyId) {
+      return { success: false, error: 'Debes seleccionar una variedad' };
     }
     if (selectedPallets.length === 0) {
       return { success: false, error: 'Debes seleccionar al menos un pallet' };
@@ -253,9 +253,10 @@ export function useDispatchWithExistingPallets(): UseDispatchWithExistingPallets
     try {
       const payload = {
         clientId: String(selectedClientId),
-        varietyId: filterVarietyId ?? undefined,
+        varietyId: selectedVarietyId ?? undefined,
         formatId: filterFormatId ?? undefined,
-        pricePerKg: parseInt(pricePerKgInput, 10),
+        // 0 = precio pendiente; se fija después desde el detalle del despacho.
+        pricePerKg: parseInt(pricePerKgInput, 10) || 0,
         pallets: selectedPallets.map((sp) => ({
           palletId: sp.pallet.id,
           trayId: sp.pallet.trayId,
@@ -284,9 +285,9 @@ export function useDispatchWithExistingPallets(): UseDispatchWithExistingPallets
     effectiveIsSessionLoading, 
     isAuthenticated, 
     currentUserId, 
-    selectedClientId, 
-    filterVarietyId, 
-    filterFormatId, 
+    selectedClientId,
+    selectedVarietyId,
+    filterFormatId,
     pricePerKgInput, 
     selectedPallets, 
     reset,

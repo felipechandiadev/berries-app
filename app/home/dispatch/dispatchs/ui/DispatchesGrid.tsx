@@ -144,9 +144,13 @@ export default function DispatchesGrid({
         sortable: true,
         filterable: true,
         renderCell: ({ row }) => (
-          <span className="font-mono text-sm text-foreground">
-            {formatCurrency(Number(row.pricePerKg || 0), row.currency)}
-          </span>
+          Number(row.pricePerKg || 0) > 0 ? (
+            <span className="font-mono text-sm text-foreground">
+              {formatCurrency(Number(row.pricePerKg), row.currency)}
+            </span>
+          ) : (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Pendiente</span>
+          )
         ),
       },
       {

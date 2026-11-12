@@ -2,6 +2,7 @@
 
 import React, { useCallback, useMemo } from 'react';
 import Select from '@/app/baseComponents/Select/Select';
+import AutoComplete from '@/app/baseComponents/AutoComplete/AutoComplete';
 import { TextField } from '@/app/baseComponents/TextField/TextField';
 import { Button } from '@/app/baseComponents/Button/Button';
 import { useAlert } from '@/app/state/hooks/useAlert';
@@ -58,14 +59,23 @@ const NewDispatchForm: React.FC = () => {
     }
   }, [submit, success, showError, isSessionLoading, isAuthenticated]);
 
-  const isProcessDisabled = useMemo(() => {
-    if (isSessionLoading || !isAuthenticated) return true;
-    if (!selectedClientId) return true;
-    if (!selectedVarietyId) return true;
-    if (!pricePerKg || pricePerKg <= 0) return true;
-    if (selectedPallets.length === 0) return true;
-    return selectedPallets.some((sp) => sp.grossWeight <= 0);
-  }, [isSessionLoading, isAuthenticated, selectedClientId, selectedVarietyId, pricePerKg, selectedPallets]);
+  // Motivos concretos por los que aún no se puede procesar (se muestran al usuario).
+  const missingReasons = useMemo(() => {
+    const reasons: string[] = [];
+    if (isSessionLoading || !isAuthenticated) reasons.push('Esperando la sesión del usuario');
+    if (!selectedClientId) reasons.push('Selecciona un cliente');
+    if (!selectedVarietyId) reasons.push('Selecciona una variedad');
+    if (selectedPallets.length === 0) reasons.push('Agrega al menos un pallet');
+    if (selectedPallets.some((sp) => sp.grossWeight <= 0)) reasons.push('Ingresa el peso bruto de cada pallet seleccionado');
+    return reasons;
+  }, [isSessionLoading, isAuthenticated, selectedClientId, selectedVarietyId, selectedPallets]);
+
+  const isProcessDisabled = missingReasons.length > 0;
+
+  const selectedClientOption = useMemo(
+    () => clientOptions.find((client) => String(client.id) === String(selectedClientId)) ?? null,
+    [clientOptions, selectedClientId],
+  );
 
   const selectedPalletIds = useMemo(() => 
     selectedPallets.map(sp => sp.pallet.id), 
@@ -76,15 +86,14 @@ const NewDispatchForm: React.FC = () => {
     <div className="flex flex-col gap-6" data-test-id="new-dispatch-form">
       {/* Header: Cliente, Variedad y Precio */}
       <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Select
+        <AutoComplete
           label="Cliente"
-          placeholder="Selecciona un cliente"
+          placeholder="Escribe para buscar un cliente"
           options={clientOptions}
-          value={selectedClientId}
-          onChange={(value) => selectClient(value ? String(value) : null)}
+          value={selectedClientOption}
+          onChange={(client) => selectClient(client ? String(client.id) : null)}
           required
           data-test-id="dispatch-client"
-          allowClear
         />
         <Select
           label="Variedad"
@@ -97,13 +106,12 @@ const NewDispatchForm: React.FC = () => {
           allowClear
         />
         <TextField
-          label="Precio de venta (CLP/kg)"
+          label="Precio de venta (CLP/kg) — opcional"
           type="currency"
           currencySymbol="$"
           value={pricePerKgInput}
           onChange={(e) => setPricePerKgInput(e.target.value)}
-          placeholder="0"
-          required
+          placeholder="Pendiente si no se conoce"
           data-test-id="dispatch-price"
         />
         <Select
@@ -185,7 +193,17 @@ const NewDispatchForm: React.FC = () => {
 
       <SummaryCard totals={totals} pricePerKg={pricePerKg} />
 
-      <div className="flex justify-end mb-12">
+      <div className="flex flex-col items-end gap-2 mb-12">
+        {isProcessDisabled && !isSubmitting && (
+          <p className="text-sm text-amber-700" data-test-id="dispatch-missing-reasons">
+            Falta: {missingReasons.join(' · ')}
+          </p>
+        )}
+        {!pricePerKg && selectedPallets.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Sin precio: el despacho quedará con precio pendiente y se podrá fijar después.
+          </p>
+        )}
         <Button
           variant="primary"
           disabled={isProcessDisabled || isSubmitting}

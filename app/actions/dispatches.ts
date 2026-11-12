@@ -353,8 +353,9 @@ export async function createDispatch(payload: CreateDispatchPayload): Promise<Tr
     if (!payload.pallets?.length) {
       return { success: false, error: 'Debes ingresar al menos un pallet' };
     }
-    if (!payload.pricePerKg || payload.pricePerKg <= 0) {
-      return { success: false, error: 'El precio de venta debe ser mayor a 0' };
+    // Precio 0 = precio pendiente (se fija después desde el detalle del despacho).
+    if (!Number.isFinite(payload.pricePerKg) || payload.pricePerKg < 0) {
+      return { success: false, error: 'El precio de venta no es válido' };
     }
 
     const customerResult = await getCustomerById(payload.clientId);

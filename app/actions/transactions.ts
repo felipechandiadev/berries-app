@@ -316,7 +316,9 @@ export async function createTransaction(data: CreateTransactionInput, auditUserI
       return { success: false, error: 'Datos requeridos faltantes' };
     }
 
-    if (data.amount <= 0) {
+    // Los despachos pueden guardarse con monto 0 cuando el precio aún no se conoce (precio pendiente).
+    const allowsZeroAmount = data.type === TransactionType.DISPATCH && data.amount === 0;
+    if (data.amount < 0 || (data.amount === 0 && !allowsZeroAmount)) {
       return { success: false, error: 'El monto debe ser mayor a 0' };
     }
 
